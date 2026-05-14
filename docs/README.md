@@ -47,3 +47,4 @@
 | 版数 | 発行日 | 改版内容 |
 |---|---|---|
 | 1.0 | 2026-05-13 | 初版作成 |
+| 1.1 | 2026-05-14 | アプリホストを 192.168.40.99 に統合。新着順仕様を確定（GROUP BY 日本語キー / ORDER BY MAX(bok_mid) DESC / WHERE vch9='comic'）。Swagger UI (/docs)・OpenAPI (/openapi.yaml,.json) を追加。API URL戦略を「相対URL」に統一し LAN/外部DDNS の両対応。外部DDNS（dirs.synology.me）経由のアクセス経路を文書化。テスト項目に Swagger / 外部アクセス / 相対URL確認 / 新着順SQL確認を追加。 |
