@@ -36,10 +36,10 @@
 
 | URL | 内容 |
 |---|---|
-| `http://192.168.40.26:8080/docs` | Swagger UI（Web経由・本番想定） |
-| `http://192.168.40.26:4000/docs` | Swagger UI（API直接アクセス） |
-| `http://192.168.40.26:4000/openapi.yaml` | OpenAPI 3.1 YAML |
-| `http://192.168.40.26:4000/openapi.json` | OpenAPI 3.1 JSON |
+| `http://192.168.40.99:8080/docs` | Swagger UI（Web経由・本番想定） |
+| `http://192.168.40.99:4000/docs` | Swagger UI（API直接アクセス） |
+| `http://192.168.40.99:4000/openapi.yaml` | OpenAPI 3.1 YAML |
+| `http://192.168.40.99:4000/openapi.json` | OpenAPI 3.1 JSON |
 | `08_API仕様_redoc.html` をダブルクリック | オフラインで Redoc 表示 |
 
 ## 改版履歴

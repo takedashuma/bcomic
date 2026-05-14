@@ -21,7 +21,7 @@ info:
   license:
     name: Internal
 servers:
-  - url: http://192.168.40.26:4000
+  - url: http://192.168.40.99:4000
     description: 社内LAN
   - url: https://dirs.synology.me
     description: 外部公開（Synology Reverse Proxy）
