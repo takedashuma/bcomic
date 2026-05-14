@@ -30,7 +30,9 @@ services:
       context: ./apps/web
       dockerfile: Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-http://192.168.40.99:4000}
+        # 空文字を許容（相対URLでnginx同一オリジン経由 = LAN/外部両対応）
+        # 強制指定したい場合だけ .env で VITE_API_URL=http://xxx を設定する
+        VITE_API_URL: "${VITE_API_URL-}"
     container_name: zcomic-web
     restart: unless-stopped
     ports:
