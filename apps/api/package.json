@@ -1,0 +1,44 @@
+{
+  "name": "zcomic-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:db-pull": "prisma db pull",
+    "prisma:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express4": "^1.1.0",
+    "@graphql-tools/schema": "^10.0.2",
+    "@prisma/client": "^5.10.0",
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6",
+    "jsonwebtoken": "^9.0.2",
+    "sharp": "^0.33.2",
+    "swagger-ui-express": "^5.0.0",
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.30",
+    "@types/swagger-ui-express": "^4.1.6",
+    "prisma": "^5.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,368 @@
+openapi: 3.1.0
+info:
+  title: zcomic-next API
+  version: "1.0.0"
+  description: |
+    PHP 製コミックビューワーを Node.js + GraphQL + React で作り直したシステムの API 仕様書。
+
+    本 API は **GraphQL** が中心で、画像配信のみ **REST** で提供する。
+
+    | 種別 | パス | 用途 |
+    |---|---|---|
+    | GraphQL | `POST /graphql` | 全データの参照・更新 |
+    | REST | `GET /healthz` | ヘルスチェック |
+    | REST | `GET /img/cover/:volumeId` | サムネ画像 |
+    | REST | `GET /img/page/:volumeId/:pageIndex` | 本ページ画像（Range対応） |
+
+    詳細な GraphQL Schema は `/graphql` の Apollo Server の introspection、または
+    リポジトリ内の `apps/api/src/schema/typeDefs.ts` を参照。
+  contact:
+    name: zcomic-next dev team
+  license:
+    name: Internal
+servers:
+  - url: http://192.168.40.26:4000
+    description: 社内LAN
+  - url: https://dirs.synology.me
+    description: 外部公開（Synology Reverse Proxy）
+  - url: http://localhost:4000
+    description: ローカル開発
+
+tags:
+  - name: GraphQL
+    description: GraphQL エンドポイント（全データ系API）
+  - name: Images
+    description: コミック画像配信
+  - name: System
+    description: ヘルスチェック・運用系
+
+security:
+  - cookieAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: ヘルスチェック
+      description: コンテナ稼働確認用。認証不要。
+      security: []
+      responses:
+        "200":
+          description: 稼働中
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  ts: { type: string, format: date-time, example: "2026-05-13T10:00:00.000Z" }
+                required: [ok, ts]
+
+  /graphql:
+    post:
+      tags: [GraphQL]
+      summary: GraphQL エンドポイント
+      description: |
+        全てのデータ系APIはこのエンドポイント1本に集約される。
+
+        実装されている操作は以下:
+
+        **Query**
+        - `me` — 現在ログイン中ユーザー
+        - `comicFolders(q, page, pageSize, sort)` — 新着順一覧
+        - `favorites(q, page, pageSize)` — お気入一覧
+        - `comicFolder(authorEn, titleEn)` — 詳細（巻一覧）
+        - `volume(id)` — 1巻情報（ビューワー用）
+
+        **Mutation**
+        - `login(email, password)` — ログイン（JWT cookie発行）
+        - `logout` — ログアウト
+        - `changePassword(oldPassword, newPassword)` — PW変更
+        - `toggleFavorite(authorEn, titleEn)` — お気入トグル
+        - `saveProgress(volumeId, page)` — 閲覧進捗保存
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraphQLRequest"
+            examples:
+              login:
+                summary: ログイン
+                value:
+                  query: "mutation($e:String!,$p:String!){ login(email:$e,password:$p){ id email nickname } }"
+                  variables: { e: "user@example.com", p: "password" }
+              comicFolders:
+                summary: 新着順一覧
+                value:
+                  query: "query($q:String,$page:Int){ comicFolders(q:$q, page:$page, pageSize:24){ items{ id authorEn titleEn authorJa titleJa volumeCount isFavorite latestVolume{ id no } } total page pageSize } }"
+                  variables: { q: null, page: 1 }
+              toggleFavorite:
+                summary: お気入トグル
+                value:
+                  query: "mutation($a:String!,$t:String!){ toggleFavorite(authorEn:$a, titleEn:$t) }"
+                  variables: { a: "JigokunoMisawa", t: "KakkoKawaiiSengen" }
+              saveProgress:
+                summary: 閲覧進捗保存
+                value:
+                  query: "mutation($v:Int!,$p:Int!){ saveProgress(volumeId:$v, page:$p) }"
+                  variables: { v: 100011, p: 23 }
+      responses:
+        "200":
+          description: GraphQL レスポンス（エラーは data/errors で表現）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraphQLResponse"
+              examples:
+                meSuccess:
+                  summary: me クエリ成功
+                  value:
+                    data:
+                      me: { id: 1, email: "user@example.com", nickname: "テスト" }
+                loginFailure:
+                  summary: ログイン失敗
+                  value:
+                    data: null
+                    errors:
+                      - message: "INVALID_CREDENTIALS"
+                        extensions: { code: "INTERNAL_SERVER_ERROR" }
+
+  /img/cover/{volumeId}:
+    get:
+      tags: [Images]
+      summary: サムネ画像（巻の1ページ目をリサイズ）
+      description: |
+        指定された巻の1ページ目を、`w` で指定された幅にリサイズして JPEG で配信する。
+        sharp による on-the-fly 処理。EXIF Orientation は考慮される。
+
+        ブラウザは Cache-Control に従い 1日キャッシュする。
+      parameters:
+        - name: volumeId
+          in: path
+          required: true
+          description: tb_bok.bok_mid
+          schema: { type: integer, minimum: 1 }
+        - name: w
+          in: query
+          required: false
+          description: 画像幅（px）。1〜800の範囲。デフォルト400。
+          schema: { type: integer, minimum: 1, maximum: 800, default: 400 }
+      responses:
+        "200":
+          description: JPEG ストリーム
+          headers:
+            Content-Type:
+              schema: { type: string, example: image/jpeg }
+            Cache-Control:
+              schema: { type: string, example: "private, max-age=86400" }
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /img/page/{volumeId}/{pageIndex}:
+    get:
+      tags: [Images]
+      summary: 本ページ画像（Range request 対応）
+      description: |
+        指定巻の `pageIndex` 番目（0始まり）のファイルを返却する。
+
+        - `Range` ヘッダを尊重し、`206 Partial Content` で部分配信
+        - 拡張子から MIME を判定（jpeg/png/webp/avif）
+        - パストラバーサル対策あり（COMIC_ROOT 外には絶対に触れない）
+
+        ビューワー用。先読みで前後1ページ分も呼ばれる想定。
+      parameters:
+        - name: volumeId
+          in: path
+          required: true
+          description: tb_bok.bok_mid
+          schema: { type: integer, minimum: 1 }
+        - name: pageIndex
+          in: path
+          required: true
+          description: 0始まりのページ番号
+          schema: { type: integer, minimum: 0 }
+        - name: Range
+          in: header
+          required: false
+          description: "RFC 7233 Range request (例: bytes=0-65535)"
+          schema: { type: string, example: "bytes=0-65535" }
+      responses:
+        "200":
+          description: 完全な画像ストリーム
+          headers:
+            Content-Type:
+              schema: { type: string }
+            Accept-Ranges:
+              schema: { type: string, example: bytes }
+            Content-Length:
+              schema: { type: integer }
+            Cache-Control:
+              schema: { type: string, example: "private, max-age=86400" }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png:  { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            image/avif: { schema: { type: string, format: binary } }
+        "206":
+          description: Partial Content（Range request 応答）
+          headers:
+            Content-Range:
+              schema: { type: string, example: "bytes 0-65535/523456" }
+            Accept-Ranges:
+              schema: { type: string, example: bytes }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: zc_token
+      description: |
+        ログイン成功時に httpOnly Cookie として発行される JWT (HS256)。
+        SameSite=Lax, Path=/, 有効期限 7日。
+
+        Swagger UI から試す際は、先に `POST /graphql` で `login` mutation を実行して
+        Cookie を取得してから他の API を呼ぶ必要がある（ブラウザのCookieが自動付与される）。
+
+  responses:
+    BadRequest:
+      description: 不正なリクエスト
+      content:
+        text/plain:
+          schema: { type: string }
+    Unauthorized:
+      description: 認証なし、または Cookie 無効
+      content:
+        text/plain:
+          schema: { type: string }
+    NotFound:
+      description: リソース未存在
+      content:
+        text/plain:
+          schema: { type: string }
+    InternalError:
+      description: サーバ内部エラー（sharp 失敗など）
+      content:
+        text/plain:
+          schema: { type: string }
+
+  schemas:
+    GraphQLRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          description: GraphQL クエリ文字列
+        variables:
+          type: object
+          additionalProperties: true
+          description: クエリ変数
+        operationName:
+          type: string
+          nullable: true
+      required: [query]
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+          nullable: true
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              message: { type: string }
+              locations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    line: { type: integer }
+                    column: { type: integer }
+              path:
+                type: array
+                items: { type: string }
+              extensions:
+                type: object
+                additionalProperties: true
+
+    # --- 参考: GraphQL Types を OpenAPI でも表現 ---
+    User:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        email: { type: string, nullable: true, example: "user@example.com" }
+        nickname: { type: string, nullable: true, example: "テストユーザー" }
+      required: [id]
+
+    Volume:
+      type: object
+      properties:
+        id: { type: integer, example: 100011 }
+        no: { type: string, nullable: true, example: "01" }
+        noJa: { type: string, nullable: true, example: "01" }
+        authorEn: { type: string, nullable: true }
+        titleEn: { type: string, nullable: true }
+        authorJa: { type: string, nullable: true, example: "地獄のミサワ" }
+        titleJa: { type: string, nullable: true, example: "カッコカワイイ宣言" }
+        folderPath:
+          type: string
+          nullable: true
+          example: "/J/[JigokunoMisawa;地獄のミサワ] KakkoKawaiiSengen;カッコカワイイ宣言/01"
+        pageCount: { type: integer, example: 192 }
+        updatedAt: { type: string, format: date-time, nullable: true }
+        progress:
+          $ref: "#/components/schemas/ReadingProgress"
+      required: [id, pageCount]
+
+    ReadingProgress:
+      type: object
+      nullable: true
+      properties:
+        lastPage: { type: integer, example: 23 }
+        updatedAt: { type: string, format: date-time }
+      required: [lastPage, updatedAt]
+
+    ComicFolder:
+      type: object
+      properties:
+        id: { type: string, description: "base64url((authorEn + 0x1F + titleEn))" }
+        topFolder: { type: string, nullable: true }
+        authorEn: { type: string }
+        titleEn: { type: string }
+        authorJa: { type: string, nullable: true }
+        titleJa: { type: string, nullable: true }
+        volumeCount: { type: integer, example: 5 }
+        latestVolume:
+          $ref: "#/components/schemas/Volume"
+        latestUpdatedAt: { type: string, format: date-time, nullable: true }
+        volumes:
+          type: array
+          items: { $ref: "#/components/schemas/Volume" }
+        isFavorite: { type: boolean, example: false }
+      required: [id, authorEn, titleEn, volumeCount, volumes, isFavorite]
+
+    ComicFolderConnection:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ComicFolder" }
+        total: { type: integer, example: 532 }
+        page: { type: integer, example: 1 }
+        pageSize: { type: integer, example: 24 }
+      required: [items, total, page, pageSize]

@@ -1,0 +1,34 @@
+# ===== Database =====
+# 既存 MariaDB に接続する場合は host を 192.168.40.99 など実 IP に
+DB_HOST=192.168.40.99
+DB_PORT=3306
+DB_NAME=comic
+DB_USER=zcomic
+DB_PASSWORD=change-me
+
+# Prisma 用の接続文字列（compose ファイル側で組み立てるためここでは個別変数で持つ）
+DATABASE_URL=mysql://zcomic:change-me@192.168.40.99:3306/comic
+
+# ===== Comic file root =====
+# ホスト側のコミック画像ディレクトリ。Docker から bind マウントされる。
+# 192.168.40.99 上の絶対パス。TB級のため image エンドポイントは Range request 対応 & on-the-fly thumbnail
+COMIC_ROOT_HOST=/Volumes/public/Comic/Renamed
+# コンテナ内でのマウント先（変更不要）
+COMIC_ROOT_CONTAINER=/comics
+
+# ===== Auth =====
+# 16文字以上のランダム文字列にしてください
+JWT_SECRET=please-change-me-to-a-random-secret
+JWT_EXPIRES_IN=7d
+# Cookie のドメイン（必要に応じて）
+COOKIE_DOMAIN=
+# 開発時は false、本番（HTTPS）は true
+COOKIE_SECURE=false
+
+# ===== Web =====
+# フロントから API への URL（compose 内ではサービス名）
+VITE_API_URL=http://localhost:4000
+
+# ===== Ports =====
+WEB_PORT=8080
+API_PORT=4000

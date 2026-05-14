@@ -1,0 +1,118 @@
+// Prisma schema for zcomic-next
+// 既存 PHP 版の MariaDB スキーマに @map でクリーン名を当てている。
+// 物理テーブル名・カラム名は一切変更しない（PHP側と並行稼働するため）。
+// 新規追加: ReadingProgress（tb_red）。
+
+generator client {
+  provider      = "prisma-client-js"
+  // ARM64 (Apple Silicon) と x86_64 の Docker 両対応
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// 会員ユーザー (tb_usr)
+model User {
+  id           Int       @id @map("usr_mid")
+  sessionId    String?   @map("usr_ses") @db.VarChar(255)
+  email        String?   @map("usr_vch0") @db.VarChar(255)
+  password     String?   @map("usr_vch1") @db.VarChar(255) // 平文 or bcrypt（初回ログイン時に移行）
+  nickname     String?   @map("usr_vch2") @db.VarChar(255)
+  gender       String?   @map("usr_vch3") @db.VarChar(255)
+  remarks      String?   @map("usr_vch4") @db.VarChar(1000)
+  birthday     DateTime? @map("usr_dat0") @db.DateTime(0)
+  createdAt    DateTime? @map("usr_inday") @db.DateTime(0)
+  updatedAt    DateTime? @map("usr_upday") @db.DateTime(0)
+  deletedAt    DateTime? @map("usr_dlday") @db.DateTime(0)
+  lastLoginAt  DateTime? @map("usr_lgday") @db.DateTime(0)
+  point        Int       @map("usr_int0")
+
+  bookmarks       Bookmark[]
+  readingProgress ReadingProgress[]
+
+  @@map("tb_usr")
+}
+
+/// コミック1巻分 (tb_bok) ※読み取り専用想定（PHP側が更新）
+model Volume {
+  id           Int       @id @map("bok_mid")
+  topFolder    String?   @map("bok_vch0") @db.VarChar(255)   // 頭文字 A/B/J 等
+  authorJa1    String?   @map("bok_vch1") @db.VarChar(255)   // "Author;著者"
+  authorEn     String?   @map("bok_vch2") @db.VarChar(255)
+  titleEn      String?   @map("bok_vch3") @db.VarChar(255)
+  no           String?   @map("bok_vch4") @db.VarChar(255)   // 巻数 "01"
+  vch5         String?   @map("bok_vch5") @db.VarChar(255)
+  authorJa     String?   @map("bok_vch6") @db.VarChar(255)   // 日本語著者
+  titleJa      String?   @map("bok_vch7") @db.VarChar(255)   // 日本語タイトル
+  noJa         String?   @map("bok_vch8") @db.VarChar(255)   // 巻数(表示用)
+  vch9         String?   @map("bok_vch9") @db.VarChar(255)
+  txt0         String?   @map("bok_txt0") @db.Text
+  folderPath   String?   @map("bok_txt1") @db.Text           // COMIC_ROOT 配下のフォルダパス
+  txt2         String?   @map("bok_txt2") @db.Text
+  point        Int?      @map("bok_int0")
+  like         Int?      @map("bok_int1")
+  int2         Int?      @map("bok_int2")
+  draft        String?   @map("bok_flg0") @db.VarChar(255)
+  recommend    String?   @map("bok_flg1") @db.VarChar(255)
+  createdAt    DateTime? @map("bok_inday") @db.DateTime(0)
+  updatedAt    DateTime? @map("bok_upday") @db.DateTime(0)
+  deletedAt    DateTime? @map("bok_dlday") @db.DateTime(0)
+  inputUserId  Int?      @map("bok_inpid")
+  updateUserId Int?      @map("bok_uppid")
+
+  readingProgress ReadingProgress[]
+
+  @@index([topFolder])
+  @@index([authorEn])
+  @@index([titleEn])
+  @@index([authorJa])
+  @@index([titleJa])
+  @@index([updatedAt])
+  @@map("tb_bok")
+}
+
+/// お気入 (tb_bkm) ※作品単位(author,title)
+model Bookmark {
+  id        Int       @id @map("bkm_mid")
+  userId    Int       @map("bkm_uid")
+  vch0      String?   @map("bkm_vch0") @db.VarChar(255)
+  vch1      String?   @map("bkm_vch1") @db.VarChar(255)
+  authorEn  String?   @map("bkm_vch2") @db.VarChar(255)
+  titleEn   String?   @map("bkm_vch3") @db.VarChar(255)
+  vch4      String?   @map("bkm_vch4") @db.VarChar(255)
+  vch5      String?   @map("bkm_vch5") @db.VarChar(255)
+  authorJa  String?   @map("bkm_vch6") @db.VarChar(255)
+  titleJa   String?   @map("bkm_vch7") @db.VarChar(255)
+  vch8      String?   @map("bkm_vch8") @db.VarChar(255)
+  vch9      String?   @map("bkm_vch9") @db.VarChar(255)
+  txt0      String?   @map("bkm_txt0") @db.Text
+  txt1      String?   @map("bkm_txt1") @db.Text
+  createdAt DateTime? @map("bkm_inday") @db.DateTime(0)
+  updatedAt DateTime? @map("bkm_upday") @db.DateTime(0)
+  deletedAt DateTime? @map("bkm_dlday") @db.DateTime(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([userId])
+  @@index([authorEn, titleEn])
+  @@map("tb_bkm")
+}
+
+/// 閲覧進捗 (tb_red) ※新規追加
+model ReadingProgress {
+  id        Int      @id @default(autoincrement()) @map("red_mid")
+  userId    Int      @map("red_uid")
+  volumeId  Int      @map("red_bid") // tb_bok.bok_mid
+  lastPage  Int      @default(0) @map("red_int0")
+  updatedAt DateTime @updatedAt @map("red_upday") @db.DateTime(0)
+  createdAt DateTime @default(now()) @map("red_inday") @db.DateTime(0)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  volume Volume @relation(fields: [volumeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, volumeId], name: "uq_red_user_volume")
+  @@map("tb_red")
+}

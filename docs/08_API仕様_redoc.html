@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>zcomic-next API 仕様書</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <style>
+      body { margin: 0; padding: 0; font-family: 'Yu Gothic', sans-serif; }
+    </style>
+  </head>
+  <body>
+    <!--
+      ローカルファイルから開く場合: 同じディレクトリに置いた openapi.yaml を読み込みます。
+      apps/api/openapi.yaml のシンボリックリンク or コピーを docs/openapi.yaml に置いてください。
+
+      または、API サーバが起動済なら:
+        spec-url="http://192.168.40.26:4000/openapi.yaml"
+      のように直接APIから取得することもできます。
+    -->
+    <redoc spec-url="./openapi.yaml"></redoc>
+    <script src="https://cdn.jsdelivr.net/npm/redoc@2/bundles/redoc.standalone.js"></script>
+  </body>
+</html>

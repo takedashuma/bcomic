@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: zcomic-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COMIC_ROOT: ${COMIC_ROOT_CONTAINER:-/comics}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      PORT: 4000
+      NODE_ENV: production
+    volumes:
+      # コミック画像のホストディレクトリを read-only でマウント
+      - ${COMIC_ROOT_HOST}:${COMIC_ROOT_CONTAINER:-/comics}:ro
+    ports:
+      - "${API_PORT:-4000}:4000"
+    networks:
+      - zcomic
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://192.168.40.26:4000}
+    container_name: zcomic-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - zcomic
+
+networks:
+  zcomic:
+    driver: bridge
