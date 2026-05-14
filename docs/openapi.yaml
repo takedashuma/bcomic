@@ -21,8 +21,14 @@ info:
   license:
     name: Internal
 servers:
+  # 相対URLを最初に置く。Swagger UI を開いた場所と同じオリジンに対してリクエストを送るので、
+  # CORS の影響を受けない（同一オリジンになる）。
+  - url: /
+    description: 現在開いているサーバ
   - url: http://192.168.40.99:4000
-    description: 社内LAN
+    description: 社内LAN（API直）
+  - url: http://192.168.40.99:8080
+    description: 社内LAN（Web経由）
   - url: https://dirs.synology.me
     description: 外部公開（Synology Reverse Proxy）
   - url: http://localhost:4000
