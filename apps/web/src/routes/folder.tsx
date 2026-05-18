@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useQuery, useMutation } from "@apollo/client";
 import { Link, useParams } from "@tanstack/react-router";
-import { COMIC_FOLDER_DETAIL, TOGGLE_FAVORITE, COMIC_FOLDERS, FAVORITES } from "@/gql/operations";
+import { COMIC_FOLDER_DETAIL, TOGGLE_FAVORITE } from "@/gql/operations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { imgUrl } from "@/lib/apollo";
@@ -19,13 +20,32 @@ export function FolderPage() {
   const { data, loading } = useQuery(COMIC_FOLDER_DETAIL, {
     variables: { authorEn, titleEn },
   });
-  const [toggleFavorite] = useMutation(TOGGLE_FAVORITE, {
-    refetchQueries: [
-      { query: COMIC_FOLDER_DETAIL, variables: { authorEn, titleEn } },
-      { query: COMIC_FOLDERS },
-      { query: FAVORITES },
-    ],
-  });
+  // FolderGrid と同じ最適化: optimistic + cache.modify で即時反映、一覧クエリは evict のみ
+  // 連打防止のため、in-flight 中は次のクリックを無視する
+  const [toggleFavorite] = useMutation(TOGGLE_FAVORITE);
+  const [busy, setBusy] = useState(false);
+
+  const onToggle = () => {
+    if (busy || !data?.comicFolder) return;
+    const next = !data.comicFolder.isFavorite;
+    const folderId = data.comicFolder.id;
+    setBusy(true);
+    toggleFavorite({
+      variables: { authorEn, titleEn },
+      optimisticResponse: { toggleFavorite: next },
+      update: (cache, { data: res }) => {
+        const r = res?.toggleFavorite;
+        if (r === undefined) return;
+        cache.modify({
+          id: cache.identify({ __typename: "ComicFolder", id: folderId }),
+          fields: { isFavorite: () => r },
+        });
+        cache.evict({ fieldName: "comicFolders" });
+        cache.evict({ fieldName: "favorites" });
+        cache.gc();
+      },
+    }).finally(() => setBusy(false));
+  };
 
   if (loading || !data?.comicFolder) {
     return <div className="text-center text-muted-foreground py-12 text-sm">読み込み中…</div>;
@@ -47,7 +67,8 @@ export function FolderPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => toggleFavorite({ variables: { authorEn, titleEn } })}
+          onClick={onToggle}
+          disabled={busy}
         >
           <Star
             className={

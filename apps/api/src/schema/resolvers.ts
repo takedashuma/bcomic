@@ -319,38 +319,40 @@ export const resolvers: any = {
       if (!ref || !ref.authorJa || !ref.titleJa) {
         throw new Error("FOLDER_NOT_FOUND");
       }
-      const existing = await ctx.prisma.bookmark.findFirst({
-        where: {
-          userId,
-          authorJa: ref.authorJa,
-          titleJa: ref.titleJa,
-          deletedAt: null,
-        },
-      });
-      if (existing) {
-        // 論理削除（既存仕様に合わせる）
-        await ctx.prisma.bookmark.update({
-          where: { id: existing.id },
-          data: { deletedAt: new Date() },
+      const authorJa = ref.authorJa;
+      const titleJa = ref.titleJa;
+      // 連続クリック・並列タブからの同時実行に対する競合を防ぐため、
+      // findFirst + update/create をトランザクションで原子的に行う。
+      // また、重複行を防ぐため updateMany で全アクティブ行を一括 soft-delete してから判定する。
+      return await ctx.prisma.$transaction(async (tx) => {
+        const existing = await tx.bookmark.findFirst({
+          where: { userId, authorJa, titleJa, deletedAt: null },
         });
-        return false;
-      }
-      // tb_bkm は PK 自動採番ではないため MAX+1
-      const max = await ctx.prisma.bookmark.aggregate({ _max: { id: true } });
-      const nextId = (max._max.id ?? 0) + 1;
-      await ctx.prisma.bookmark.create({
-        data: {
-          id: nextId,
-          userId,
-          authorEn: args.authorEn,
-          titleEn: args.titleEn,
-          authorJa: ref?.authorJa ?? null,
-          titleJa: ref?.titleJa ?? null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
+        if (existing) {
+          // 万一の重複（過去の race による）も含めて全て論理削除する
+          await tx.bookmark.updateMany({
+            where: { userId, authorJa, titleJa, deletedAt: null },
+            data: { deletedAt: new Date() },
+          });
+          return false;
+        }
+        // PK は自動採番でないため MAX+1（同一トランザクション内で安全）
+        const max = await tx.bookmark.aggregate({ _max: { id: true } });
+        const nextId = (max._max.id ?? 0) + 1;
+        await tx.bookmark.create({
+          data: {
+            id: nextId,
+            userId,
+            authorEn: args.authorEn,
+            titleEn: args.titleEn,
+            authorJa,
+            titleJa,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        return true;
       });
-      return true;
     },
 
     async saveProgress(_: any, args: { volumeId: number; page: number }, ctx: GraphQLContext) {
