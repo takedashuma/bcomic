@@ -207,8 +207,77 @@ export const resolvers: any = {
       return listFolders(ctx, { ...args, onlyFavorites: false });
     },
 
-    favorites(_: any, args: any, ctx: GraphQLContext) {
-      return listFolders(ctx, { ...args, onlyFavorites: true });
+    async favorites(_: any, args: any, ctx: GraphQLContext) {
+      // Favorites は専用クエリで高速化。tb_bok 全体に対する巨大OR句のgroupByを避け、
+      // tb_bkm を起点にして tb_bok を 1作品ずつピンポイントで引く。
+      const userId = requireUser(ctx);
+      const page = Math.max(args.page ?? 1, 1);
+      const pageSize = Math.min(Math.max(args.pageSize ?? 24, 1), 100);
+      const skip = (page - 1) * pageSize;
+      const q = (args.q as string | null | undefined)?.trim() || null;
+
+      const whereBkm: any = { userId, deletedAt: null };
+      if (q) {
+        whereBkm.OR = [
+          { authorJa: { contains: q } },
+          { titleJa: { contains: q } },
+          { authorEn: { contains: q } },
+          { titleEn: { contains: q } },
+        ];
+      }
+
+      // 同じ(authorJa,titleJa)が複数行あっても1作品にまとめるため、
+      // 一旦多めに取得して JS で重複除去 + ページング
+      const candidates = await ctx.prisma.bookmark.findMany({
+        where: whereBkm,
+        orderBy: { id: "desc" }, // 新しく付けたお気入が上
+        select: { authorJa: true, titleJa: true, id: true },
+      });
+
+      const seen = new Set<string>();
+      const unique: { authorJa: string; titleJa: string }[] = [];
+      for (const b of candidates) {
+        if (!b.authorJa || !b.titleJa) continue;
+        const k = `${b.authorJa}\x1F${b.titleJa}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        unique.push({ authorJa: b.authorJa, titleJa: b.titleJa });
+      }
+
+      const total = unique.length;
+      const slice = unique.slice(skip, skip + pageSize);
+
+      const items = await Promise.all(
+        slice.map(async (k) => {
+          const latest = await ctx.prisma.volume.findFirst({
+            where: { authorJa: k.authorJa, titleJa: k.titleJa, deletedAt: null, vch9: "comic" },
+            orderBy: { id: "desc" },
+          });
+          if (!latest) return null;
+          const volumeCount = await ctx.prisma.volume.count({
+            where: { authorJa: k.authorJa, titleJa: k.titleJa, deletedAt: null, vch9: "comic" },
+          });
+          return {
+            id: folderId(latest.authorEn ?? "", latest.titleEn ?? ""),
+            topFolder: latest.topFolder,
+            authorEn: latest.authorEn,
+            titleEn: latest.titleEn,
+            authorJa: k.authorJa,
+            titleJa: k.titleJa,
+            volumeCount,
+            latestVolume: latest,
+            latestUpdatedAt: latest.updatedAt,
+            isFavorite: true, // Favorites クエリなので確定
+          };
+        })
+      );
+
+      return {
+        items: items.filter((x): x is NonNullable<typeof x> => x !== null),
+        total,
+        page,
+        pageSize,
+      };
     },
 
     async comicFolder(_: any, args: { authorEn: string; titleEn: string }, ctx: GraphQLContext) {
