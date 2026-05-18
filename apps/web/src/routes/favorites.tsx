@@ -1,16 +1,26 @@
-import { useState } from "react";
 import { useQuery } from "@apollo/client";
+import { useSearch, useNavigate } from "@tanstack/react-router";
 import { FAVORITES } from "@/gql/operations";
 import { Input } from "@/components/ui/input";
 import { FolderGrid } from "@/components/FolderGrid";
 import { Paginator } from "@/components/Paginator";
 
 export function FavoritesPage() {
-  const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
+  const search = useSearch({ strict: false }) as { page?: number; q?: string };
+  const navigate = useNavigate();
+  const page = search.page ?? 1;
+  const q = search.q ?? "";
+
   const { data, loading } = useQuery(FAVORITES, {
     variables: { q: q || null, page, pageSize: 24 },
   });
+
+  const setQ = (next: string) => {
+    navigate({ to: "/favorites", search: { q: next, page: 1 } } as any);
+  };
+  const setPage = (next: number) => {
+    navigate({ to: "/favorites", search: { q, page: next } } as any);
+  };
 
   return (
     <div className="space-y-3">
@@ -19,10 +29,7 @@ export function FavoritesPage() {
         <Input
           placeholder="タイトル・著者を検索"
           value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => setQ(e.target.value)}
           className="max-w-xs"
         />
       </div>

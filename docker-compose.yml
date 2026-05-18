@@ -18,8 +18,12 @@ services:
       PORT: 4000
       NODE_ENV: production
     volumes:
-      # コミック画像のホストディレクトリを read-only でマウント
+      # コミック画像をマウント。
+      # ・対処A使用時: ホストの /Volumes/public/... を bind マウント（COMIC_ROOT_HOST に絶対パス）
+      # ・対処B使用時: 下の named volume "comic_data" を使う（SMB直接マウント）
       - ${COMIC_ROOT_HOST}:${COMIC_ROOT_CONTAINER:-/comics}:ro
+      # 対処B時はこちらを有効化（上の bind 行をコメントアウト）:
+      # - comic_data:${COMIC_ROOT_CONTAINER:-/comics}:ro
     ports:
       - "${API_PORT:-4000}:4000"
     networks:
@@ -45,3 +49,14 @@ services:
 networks:
   zcomic:
     driver: bridge
+
+# ===== 対処B（NAS SMBを直接マウント）用 =====
+# 上の api.volumes の bind 行を comic_data に切り替えて使用。
+# .env に SMB_HOST / SMB_SHARE / SMB_USER / SMB_PASSWORD を設定。
+volumes:
+  comic_data:
+    driver: local
+    driver_opts:
+      type: cifs
+      o: "username=${SMB_USER:-},password=${SMB_PASSWORD:-},ro,uid=1000,gid=1000,vers=3.0,nounix,noserverino"
+      device: "//${SMB_HOST:-127.0.0.1}/${SMB_SHARE:-public}/Comic/Renamed"

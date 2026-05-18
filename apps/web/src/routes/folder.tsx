@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@apollo/client";
-import { Link, useParams, useNavigate } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { COMIC_FOLDER_DETAIL, TOGGLE_FAVORITE, COMIC_FOLDERS, FAVORITES } from "@/gql/operations";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,11 @@ export function FolderPage() {
     authorEn: string;
     titleEn: string;
   };
-  const navigate = useNavigate();
+  // 戻る挙動: ブラウザ履歴を1つ戻る = 直前にいたページ(検索/ページ番号付き) に確実に戻る
+  const goBack = () => {
+    if (window.history.length > 1) window.history.back();
+    else window.location.assign("/");
+  };
   const { data, loading } = useQuery(COMIC_FOLDER_DETAIL, {
     variables: { authorEn, titleEn },
   });
@@ -30,7 +34,7 @@ export function FolderPage() {
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate({ to: "/" })}>
+      <Button variant="ghost" size="sm" onClick={goBack}>
         <ChevronLeft className="w-4 h-4 mr-1" /> 戻る
       </Button>
 

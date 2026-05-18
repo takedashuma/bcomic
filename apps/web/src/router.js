@@ -29,15 +29,23 @@ const authedRoute = createRoute({
     id: "authed",
     component: AppLayout,
 });
+// 一覧系ルートは search params (page, q) を URL に反映して
+// ブラウザ戻る時に元のページ・検索条件を復元できるようにする
+const listSearchSchema = (s) => ({
+    page: typeof s.page === "string" ? Math.max(1, Number(s.page) || 1) : s.page || 1,
+    q: typeof s.q === "string" ? s.q : "",
+});
 const homeRoute = createRoute({
     getParentRoute: () => authedRoute,
     path: "/",
     component: HomePage,
+    validateSearch: listSearchSchema,
 });
 const favoritesRoute = createRoute({
     getParentRoute: () => authedRoute,
     path: "/favorites",
     component: FavoritesPage,
+    validateSearch: listSearchSchema,
 });
 const settingsRoute = createRoute({
     getParentRoute: () => authedRoute,

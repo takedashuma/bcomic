@@ -28,7 +28,8 @@ export function FolderGrid({ items }: { items: FolderItem[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
       {items.map((it) => (
-        <Card key={it.id} className="overflow-hidden group">
+        <Card key={it.id} className="overflow-hidden group flex flex-col">
+          {/* サムネ + 巻数+タイトル は Link でラップ（ここをクリックで詳細へ） */}
           <Link
             to="/folder/$authorEn/$titleEn"
             params={{ authorEn: it.authorEn, titleEn: it.titleEn }}
@@ -44,30 +45,42 @@ export function FolderGrid({ items }: { items: FolderItem[] }) {
                 />
               ) : null}
             </div>
-            <div className="p-2 space-y-0.5">
-              <div className="text-xs text-muted-foreground">{it.volumeCount}冊</div>
+            <div className="px-2 pt-2 space-y-0.5">
               <div className="text-sm font-medium leading-tight line-clamp-2">
+                <span className="text-muted-foreground mr-1">{it.volumeCount}冊</span>
                 {it.titleJa ?? it.titleEn}
-              </div>
-              <div className="text-xs text-muted-foreground line-clamp-1">
-                {it.authorJa ?? it.authorEn}
               </div>
             </div>
           </Link>
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              toggleFavorite({ variables: { authorEn: it.authorEn, titleEn: it.titleEn } });
-            }}
-            className="absolute top-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur hover:bg-background"
-            aria-label={it.isFavorite ? "お気入から削除" : "お気入に追加"}
-          >
-            <Star
-              className={
-                "w-4 h-4 " + (it.isFavorite ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground")
-              }
-            />
-          </button>
+
+          {/* 著者行: お気入トグルボタン + 著者名（Linkの外に置いて誤クリック防止） */}
+          <div className="px-2 pb-2 pt-1 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFavorite({ variables: { authorEn: it.authorEn, titleEn: it.titleEn } });
+              }}
+              className="shrink-0 p-0.5 rounded hover:bg-muted"
+              aria-label={it.isFavorite ? "お気入から削除" : "お気入に追加"}
+              title={it.isFavorite ? "お気入から削除" : "お気入に追加"}
+            >
+              <Star
+                className={
+                  "w-4 h-4 " +
+                  (it.isFavorite ? "fill-yellow-400 text-yellow-500" : "text-muted-foreground")
+                }
+              />
+            </button>
+            <Link
+              to="/folder/$authorEn/$titleEn"
+              params={{ authorEn: it.authorEn, titleEn: it.titleEn }}
+              className="text-xs text-muted-foreground line-clamp-1 hover:underline min-w-0"
+            >
+              {it.authorJa ?? it.authorEn}
+            </Link>
+          </div>
         </Card>
       ))}
     </div>

@@ -33,6 +33,9 @@ const authedRoute = createRoute({
   component: AppLayout,
 });
 
+// 一覧系ルートは search params (page, q) を URL に反映する。
+// validateSearch をルート側に定義すると他のページからのnavigate型が複雑化するため、
+// 各コンポーネント側で useSearch({ strict: false }) で読み取り、未指定時はデフォルトを当てる。
 const homeRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/",
