@@ -1,0 +1,62 @@
+// Admin API 用 Prisma スキーマ。
+// 既存 DB と同じ MariaDB に接続するが、本サイト(apps/api)とは別の Prisma client インスタンスを使う。
+// admin 専用のテーブル(tb_adm)と、共有テーブル(tb_bok / tb_usr / tb_bkm)の両方を扱う。
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("ADMIN_DATABASE_URL")
+}
+
+/// 管理者ユーザー (tb_adm)
+model Admin {
+  id        Int       @id @map("adm_mid")
+  createdAt DateTime? @map("adm_inday") @db.DateTime(0)
+  updatedAt DateTime? @map("adm_upday") @db.DateTime(0)
+  deletedAt DateTime? @map("adm_dlday") @db.DateTime(0)
+  lastLoginAt DateTime? @map("adm_lgday") @db.DateTime(0)
+  name      String?   @map("adm_vch0") @db.VarChar(255)
+  password  String?   @map("adm_vch1") @db.VarChar(255)
+
+  @@map("tb_adm")
+}
+
+/// コミック1巻分 (tb_bok) — 管理側では書込権限あり
+model Volume {
+  id           Int       @id @map("bok_mid")
+  topFolder    String?   @map("bok_vch0") @db.VarChar(255)
+  authorJa1    String?   @map("bok_vch1") @db.VarChar(255)
+  authorEn     String?   @map("bok_vch2") @db.VarChar(255)
+  titleEn      String?   @map("bok_vch3") @db.VarChar(255)
+  no           String?   @map("bok_vch4") @db.VarChar(255)
+  vch5         String?   @map("bok_vch5") @db.VarChar(255)
+  authorJa     String?   @map("bok_vch6") @db.VarChar(255)
+  titleJa      String?   @map("bok_vch7") @db.VarChar(255)
+  noJa         String?   @map("bok_vch8") @db.VarChar(255)
+  vch9         String?   @map("bok_vch9") @db.VarChar(255)
+  txt0         String?   @map("bok_txt0") @db.Text
+  folderPath   String?   @map("bok_txt1") @db.Text
+  txt2         String?   @map("bok_txt2") @db.Text
+  point        Int?      @map("bok_int0")
+  like         Int?      @map("bok_int1")
+  int2         Int?      @map("bok_int2")
+  draft        String?   @map("bok_flg0") @db.VarChar(255)
+  recommend    String?   @map("bok_flg1") @db.VarChar(255)
+  createdAt    DateTime? @map("bok_inday") @db.DateTime(0)
+  updatedAt    DateTime? @map("bok_upday") @db.DateTime(0)
+  deletedAt    DateTime? @map("bok_dlday") @db.DateTime(0)
+  inputUserId  Int?      @map("bok_inpid")
+  updateUserId Int?      @map("bok_uppid")
+
+  @@index([topFolder])
+  @@index([authorEn])
+  @@index([titleEn])
+  @@index([authorJa])
+  @@index([titleJa])
+  @@index([updatedAt])
+  @@map("tb_bok")
+}

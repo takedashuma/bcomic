@@ -46,6 +46,62 @@ services:
     networks:
       - zcomic
 
+  # ===== 管理サイト =====
+  # 本サイト(api/web)とは完全に独立。 DB / FS は共有するが、コードベース・コンテナ・ポート全て別。
+  api-admin:
+    build:
+      context: ./apps/api-admin
+      dockerfile: Dockerfile
+    container_name: zcomic-api-admin
+    restart: unless-stopped
+    environment:
+      ADMIN_DATABASE_URL: ${ADMIN_DATABASE_URL:-${DATABASE_URL}}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_JWT_EXPIRES_IN: ${ADMIN_JWT_EXPIRES_IN:-1d}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      COMIC_ROOT: ${COMIC_ROOT_CONTAINER:-/comics}
+      STAGING_ROOT: ${STAGING_ROOT_CONTAINER:-/staging}
+      # Home 3ボタンが使う固定ディレクトリ（コンテナ内パス）
+      EXTRACT_ARCHIVE_DIR: ${EXTRACT_ARCHIVE_DIR:-/download_root/Zip}
+      EXTRACT_ER_ARCHIVE_DIR: ${EXTRACT_ER_ARCHIVE_DIR:-/download_root/Zip}
+      UNZIP_DEST_DIR: ${UNZIP_DEST_DIR:-/download_root/Unzip}
+      ARCHIVE_DONE_DIR: ${ARCHIVE_DONE_DIR:-/download_root/zFin}
+      UNZIP_DEST_DIR_ER: ${UNZIP_DEST_DIR_ER:-}
+      ARCHIVE_DONE_DIR_ER: ${ARCHIVE_DONE_DIR_ER:-}
+      MERGE_CHAPTER_DIR: ${MERGE_CHAPTER_DIR:-/download_root/Chapter}
+      REGIST_DIR: ${REGIST_DIR:-/download_root/Regist}
+      ADMIN_CORS_ORIGINS: ${ADMIN_CORS_ORIGINS:-http://localhost:5174,http://localhost:8081}
+      ADMIN_PORT: 4001
+      NODE_ENV: production
+    volumes:
+      # COMIC_ROOT は管理側でも参照(登録時のパス検証等)、 ただし read-only
+      - ${COMIC_ROOT_HOST}:${COMIC_ROOT_CONTAINER:-/comics}:ro
+      # 作業領域（移動・削除・作成）は read-write
+      - ${STAGING_ROOT_HOST:-${COMIC_ROOT_HOST}}:${STAGING_ROOT_CONTAINER:-/staging}
+      # /Volumes/public/Download をまとめて1マウント（rename が cross-device にならないため）
+      # 配下: /Zip /Unzip /zFin /Chapter
+      - ${DOWNLOAD_ROOT_HOST:-/Volumes/public/Download}:${DOWNLOAD_ROOT_CONTAINER:-/download_root}
+    ports:
+      - "${ADMIN_API_PORT:-4001}:4001"
+    networks:
+      - zcomic
+
+  web-admin:
+    build:
+      context: ./apps/web-admin
+      dockerfile: Dockerfile
+      args:
+        VITE_ADMIN_API_URL: "${VITE_ADMIN_API_URL-}"
+    container_name: zcomic-web-admin
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_WEB_PORT:-8081}:80"
+    depends_on:
+      - api-admin
+    networks:
+      - zcomic
+
 networks:
   zcomic:
     driver: bridge

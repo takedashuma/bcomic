@@ -7,3 +7,7 @@ build/
 .DS_Store
 apps/api/prisma/*.db
 apps/web/.vite/
+
+# Legacy source dumps (参照用、コミットしない)
+/_legacy_admin_php/
+/_legacy_admin_web/
