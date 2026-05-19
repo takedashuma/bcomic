@@ -75,8 +75,9 @@ services:
       ADMIN_PORT: 4001
       NODE_ENV: production
     volumes:
-      # COMIC_ROOT は管理側でも参照(登録時のパス検証等)、 ただし read-only
-      - ${COMIC_ROOT_HOST}:${COMIC_ROOT_CONTAINER:-/comics}:ro
+      # COMIC_ROOT は管理側で 入換・削除 操作を行うため read-write
+      # （比較標準/比較E の exchangeDir / deleteDBandBook で書き込む）
+      - ${COMIC_ROOT_HOST}:${COMIC_ROOT_CONTAINER:-/comics}
       # 作業領域（移動・削除・作成）は read-write
       - ${STAGING_ROOT_HOST:-${COMIC_ROOT_HOST}}:${STAGING_ROOT_CONTAINER:-/staging}
       # /Volumes/public/Download をまとめて1マウント（rename が cross-device にならないため）

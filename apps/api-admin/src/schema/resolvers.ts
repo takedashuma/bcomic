@@ -11,6 +11,9 @@ import { GraphQLScalarType, Kind } from "graphql";
 import { searchMangaKingdom } from "../jobs/searchMangaKingdom.js";
 import { crawl13dl, crawl13dlList } from "../jobs/crawl13dl.js";
 import { makeRegistDir } from "../jobs/registDir.js";
+import { compareUnregist } from "../jobs/compareUnregist.js";
+import { exchangeDir, deleteDBandBook, renameRegistFolder } from "../jobs/compareOps.js";
+import { startRegistUnregistAll } from "../jobs/registUnregist.js";
 import { startExtractAllArchives } from "../jobs/extractAllArchives.js";
 import { startMergeAllChapters } from "../jobs/mergeAllChapters.js";
 import { getJob } from "../jobs/jobStore.js";
@@ -120,6 +123,11 @@ export const resolvers: any = {
     async jobStatus(_: any, args: { id: string }, ctx: AdminContext) {
       requireAdmin(ctx);
       return getJob(args.id);
+    },
+
+    async compareUnregist(_: any, __: any, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return compareUnregist();
     },
   },
 
@@ -259,12 +267,38 @@ export const resolvers: any = {
 
     async crawl13dlList(_: any, args: any, ctx: AdminContext) {
       requireAdmin(ctx);
-      return crawl13dlList(args.categoryUrl, args.chunkNo, args.chunkSize ?? 8);
+      return crawl13dlList(
+        args.categoryUrl,
+        args.pageNum ?? 1,
+        args.startIdx ?? 1,
+        args.endIdx ?? 7
+      );
     },
 
     async makeRegistDir(_: any, args: any, ctx: AdminContext) {
       requireAdmin(ctx);
       return makeRegistDir(args.dir);
+    },
+
+    async exchangeDir(_: any, args: { newDir: string }, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return exchangeDir(args.newDir);
+    },
+    async deleteDBandBook(_: any, args: { bookPath: string }, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return deleteDBandBook(args.bookPath);
+    },
+    async renameRegistFolder(
+      _: any,
+      args: { oldDir: string; newDir: string; inRegist?: boolean },
+      ctx: AdminContext
+    ) {
+      requireAdmin(ctx);
+      return renameRegistFolder(args.oldDir, args.newDir, args.inRegist ?? true);
+    },
+    async startRegistUnregistAll(_: any, __: any, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return startRegistUnregistAll();
     },
   },
 };

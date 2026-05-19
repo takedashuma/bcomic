@@ -133,7 +133,7 @@ export const typeDefs = gql`
     ok: Boolean!
     baseUrl: String!
     pageUrl: String!
-    chunkNo: Int!
+    pageNum: Int!
     startIdx: Int!
     endIdx: Int!
     totalItems: Int!
@@ -151,12 +151,37 @@ export const typeDefs = gql`
     path: String
   }
 
+  type CompareEntry {
+    folderPath: String!
+    authorHead: String!
+    authorTitleFolder: String!
+    authorJa: String!
+    titleJa: String!
+    volumeNo: String!
+    stockVolumes: [String!]!
+    stockCount: Int!
+    alreadyInDb: Boolean!
+    existingBokMid: Int
+  }
+  type UnregistCompareResult {
+    ok: Boolean!
+    baseDir: String!
+    entries: [CompareEntry!]!
+    totalEntries: Int!
+    logs: [String!]!
+  }
+
   type Query {
     me: Admin
     searchComics(q: String!, page: Int = 1, pageSize: Int = 50): [Volume!]!
     searchUnknown(q: String, page: Int = 1, pageSize: Int = 50): UnknownConnection!
     compareNormal(folderPath: String!): CompareResult!
     compareEro(folderPath: String!): CompareResult!
+    """
+    REGIST_DIR 配下を再帰スキャンして UNREGIST のエントリ一覧と
+    既存DBの同タイトル巻情報 (stock) を返す。
+    """
+    compareUnregist: UnregistCompareResult!
     """
     非同期ジョブの進捗を取得（フロントは polling で完了検知）
     """
@@ -195,10 +220,16 @@ export const typeDefs = gql`
     crawlPage(url: String!): CrawlResult!
 
     """
-    13dl カテゴリの 1ページ (8件単位チャンク) をクロールし、
-    各アイテムの詳細ページから RapidGator リンクを抽出
+    13dl カテゴリページ (1ページ=24件) の指定範囲 (startIdx..endIdx) をクロールし
+    各アイテム詳細から RapidGator リンクを抽出する。
+    pageNum=1, startIdx=1, endIdx=7  →  Page1の1〜7番目  という指定。
     """
-    crawl13dlList(categoryUrl: String, chunkNo: Int!, chunkSize: Int = 8): CrawlListResult!
+    crawl13dlList(
+      categoryUrl: String
+      pageNum: Int = 1
+      startIdx: Int = 1
+      endIdx: Int = 7
+    ): CrawlListResult!
 
     """
     REGIST_DIR 配下に dir をそのまま作成する
@@ -206,6 +237,25 @@ export const typeDefs = gql`
     例: dir="/0/[Unknown;Unknown] NoEnglishTitle;蟲蝕のアイリス"
     """
     makeRegistDir(dir: String!): FolderOpResult!
+
+    # ===== 比較標準 =====
+    """
+    REGIST_DIR/<newDir> を COMIC_ROOT/<newDir> に入換 (rm + cp + rm)
+    """
+    exchangeDir(newDir: String!): FolderOpResult!
+    """
+    DBから該当 bookPath を含むレコード削除 + COMIC_ROOT/bookPath を rm
+    """
+    deleteDBandBook(bookPath: String!): FolderOpResult!
+    """
+    REGIST_DIR (デフォルト) または COMIC_ROOT 内で oldDir → newDir に rename
+    """
+    renameRegistFolder(oldDir: String!, newDir: String!, inRegist: Boolean = true): FolderOpResult!
+    """
+    REGIST_DIR 配下の全ての /initial/authorTitle/volume を tb_bok に登録し、
+    COMIC_ROOT へコピー後 REGIST_DIR を空にする (非同期ジョブ)
+    """
+    startRegistUnregistAll: Job!
 
     # ----- 検索結果に対するフォルダ操作 -----
     """

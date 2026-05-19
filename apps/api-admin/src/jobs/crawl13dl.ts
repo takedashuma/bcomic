@@ -40,7 +40,7 @@ export interface CrawlListResult {
   ok: boolean;
   baseUrl: string;
   pageUrl: string;
-  chunkNo: number;
+  pageNum: number;
   startIdx: number;
   endIdx: number;
   totalItems: number;
@@ -216,34 +216,44 @@ function listCategoryItems(html: string, log: string[]): { title: string; href: 
 }
 
 /**
- * chunkNo (0始まり) を pageInfo "p-start-end" に変換。
- * 1チャンク=8件固定。各ページに何件あるかは事前不明なので
- * page を pageNo = floor(chunkNo*8 / pagePerSize) + 1、 ... となるが、
- * 旧PHPはユーザー手動で page と range を指定する設計だった。
- * ここでは「1チャンク=1ページの先頭8件」固定で実装する。
- * page = chunkNo + 1, start = 1, end = 8。
+ * pageInfo "page-start-end" 相当の指定でクロール。
+ *   pageNum  = 1始まり、カテゴリの p=N
+ *   startIdx = 1始まり、ページ内 1〜24 のうち取得開始
+ *   endIdx   = 1始まり、ページ内 1〜24 のうち取得終了（含む）
+ *
+ * 例:
+ *   (1, 1, 7)   → ?p=1 の 1〜7番目
+ *   (1, 8, 15)  → ?p=1 の 8〜15番目
+ *   (1, 16, 24) → ?p=1 の 16〜24番目
+ *   (2, 1, 7)   → ?p=2 の 1〜7番目
+ *
+ * 1ページ最大24件 (13dl の通常表示)。範囲を超えた場合は安全にクリップ。
  */
 export async function crawl13dlList(
   categoryUrl: string | null | undefined,
-  chunkNo: number,
-  chunkSize = 8
+  pageNum: number,
+  startIdx: number,
+  endIdx: number
 ): Promise<CrawlListResult> {
   const start = Date.now();
   const log: string[] = [];
   const base = categoryUrl?.trim() || DEFAULT_BASE;
-  const pageNum = chunkNo + 1;
+  const safePage = Math.max(1, pageNum | 0);
+  const safeStart = Math.max(1, startIdx | 0);
+  const safeEnd = Math.max(safeStart, endIdx | 0);
+
   // 旧PHPは ?p=N
-  const pageUrl = `${base.replace(/\/+$/, "")}/?p=${pageNum}`;
-  log.push(`fetch: ${pageUrl}`);
+  const pageUrl = `${base.replace(/\/+$/, "")}/?p=${safePage}`;
+  log.push(`fetch: ${pageUrl}  range=${safeStart}-${safeEnd}`);
   const r = await httpGet(pageUrl);
   if (!r.ok) {
     return {
       ok: false,
       baseUrl: base,
       pageUrl,
-      chunkNo,
-      startIdx: 1,
-      endIdx: chunkSize,
+      pageNum: safePage,
+      startIdx: safeStart,
+      endIdx: safeEnd,
       totalItems: 0,
       items: [],
       elapsedSec: elapsed(start),
@@ -251,19 +261,21 @@ export async function crawl13dlList(
     };
   }
   const candidates = listCategoryItems(r.data, log);
-  const sliced = candidates.slice(0, chunkSize);
+  // 1始まりの範囲を 0始まりの配列スライスに変換
+  const sliced = candidates.slice(safeStart - 1, safeEnd);
+  log.push(`  slice ${safeStart}..${safeEnd} → ${sliced.length} item(s)`);
+
   const items: CrawledItem[] = [];
   for (let i = 0; i < sliced.length; i++) {
     const { title, href } = sliced[i];
-    log.push(`[${i + 1}/${sliced.length}] ${title}`);
-    // [Novel] はスキップ
+    const idxLabel = safeStart + i;
+    log.push(`[${idxLabel}] ${title}`);
     if (/\[Novel\]/i.test(title)) {
       log.push(`  skip (Novel)`);
       continue;
     }
     const split = splitTitle(title);
     log.push(`  titleJa="${split.titleJa}"  titleEn="${split.titleEn}"`);
-    // 詳細ページから RG を取得
     const detailR = await httpGet(href);
     let rgLinks: RGLink[] = [];
     if (detailR.ok) {
@@ -272,7 +284,6 @@ export async function crawl13dlList(
     } else {
       log.push(`  [error] detail fetch: ${detailR.err}`);
     }
-    // DB 引き
     const dirs = await lookupDirPaths(split.titleJa, split.titleEn);
     log.push(`  ${dirs.existDir ? "existDir" : "newDir"}=${dirs.existDir ?? dirs.newDir}`);
 
@@ -293,9 +304,9 @@ export async function crawl13dlList(
     ok: true,
     baseUrl: base,
     pageUrl,
-    chunkNo,
-    startIdx: 1,
-    endIdx: chunkSize,
+    pageNum: safePage,
+    startIdx: safeStart,
+    endIdx: safeEnd,
     totalItems: items.length,
     items,
     elapsedSec: elapsed(start),

@@ -8,19 +8,24 @@ import { Card } from "@/components/ui/card";
 /**
  * 13dl カテゴリ クロール画面（旧PHP /V_SearchPage 後継）
  *
- * 旧PHPロジック (read_html.php → read_feed_comic_returnjson2.php → read_feed_detail.php) を移植:
- *  - https://13dl.me/category/raw-manga/?p=N でカテゴリ取得
- *  - 各アイテムの title から JP/EN を分解
- *  - 詳細ページから RapidGator のファイル名/URLを抽出
- *  - DB を検索して既存(existDir) or 新規(newDir) のフォルダパスを返す
- *
- * UI側では:
- *  - ExistDir / NEW Dir ボタンで makeRegistDir mutation を叩いて
- *    REGIST_DIR 配下に対応フォルダを作成する
+ * 仕様:
+ *   - 1ページあたり 24 タイトル
+ *   - 24件一気にクロールすると重い → 3チャンクに分けて指定:
+ *       Page:1-7 / Page:8-15 / Page:16-24
+ *   - pageNum も切り替え可能（Page数だけ別selectorで進める）
  */
 const DEFAULT_BASE = "https://13dl.me/category/raw-manga/";
-const CHUNK_SIZE = 8;
-const MAX_CHUNKS = 10;
+
+interface ChunkOption {
+  label: string;
+  startIdx: number;
+  endIdx: number;
+}
+const CHUNKS: ChunkOption[] = [
+  { label: "Page:1-7", startIdx: 1, endIdx: 7 },
+  { label: "Page:8-15", startIdx: 8, endIdx: 15 },
+  { label: "Page:16-24", startIdx: 16, endIdx: 24 },
+];
 
 interface RGLink {
   fileName: string;
@@ -40,7 +45,8 @@ interface Item {
 
 export function SearchPagePage() {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE);
-  const [chunkNo, setChunkNo] = useState(0);
+  const [pageNum, setPageNum] = useState(1);
+  const [chunkIdx, setChunkIdx] = useState(0); // CHUNKS のインデックス
   const [runCrawl, crawlState] = useMutation(CRAWL_13DL_LIST);
   const [doMake] = useMutation(MAKE_REGIST_DIR);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -48,18 +54,17 @@ export function SearchPagePage() {
   const result = crawlState.data?.crawl13dlList;
   const items: Item[] = useMemo(() => (result?.items as Item[]) ?? [], [result]);
 
-  const chunkOptions = useMemo(
-    () =>
-      Array.from({ length: MAX_CHUNKS }, (_, i) => ({
-        value: i,
-        label: `Page${i + 1}`,
-      })),
-    []
-  );
-
   const runFetch = () => {
     setActionMsg(null);
-    runCrawl({ variables: { categoryUrl: baseUrl, chunkNo, chunkSize: CHUNK_SIZE } });
+    const chunk = CHUNKS[chunkIdx];
+    runCrawl({
+      variables: {
+        categoryUrl: baseUrl,
+        pageNum,
+        startIdx: chunk.startIdx,
+        endIdx: chunk.endIdx,
+      },
+    });
   };
 
   const onMakeDir = async (dir: string) => {
@@ -80,15 +85,23 @@ export function SearchPagePage() {
         <div className="text-sm font-medium">カテゴリ URL</div>
         <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
         <div className="flex flex-wrap items-center gap-2">
-          <label className="text-sm">ページ:</label>
+          <label className="text-sm">ページ番号:</label>
+          <Input
+            type="number"
+            min={1}
+            value={pageNum}
+            onChange={(e) => setPageNum(Math.max(1, Number(e.target.value) || 1))}
+            className="w-20"
+          />
+          <label className="text-sm">範囲:</label>
           <select
-            value={chunkNo}
-            onChange={(e) => setChunkNo(Number(e.target.value))}
+            value={chunkIdx}
+            onChange={(e) => setChunkIdx(Number(e.target.value))}
             className="h-9 rounded-md border border-input bg-background px-2 text-sm"
           >
-            {chunkOptions.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
+            {CHUNKS.map((c, i) => (
+              <option key={i} value={i}>
+                {c.label}
               </option>
             ))}
           </select>
@@ -97,7 +110,8 @@ export function SearchPagePage() {
           </Button>
           {result && (
             <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-              {result.totalItems} 件 / {result.elapsedSec.toFixed(2)}s
+              p{result.pageNum} {result.startIdx}-{result.endIdx}: {result.totalItems} 件 /{" "}
+              {result.elapsedSec.toFixed(2)}s
             </span>
           )}
         </div>
@@ -170,7 +184,6 @@ export function SearchPagePage() {
               </div>
             </div>
 
-            {/* 作成予定パスを表示 */}
             {(it.existDir || it.newDir) && (
               <div className="text-xs font-mono break-all text-muted-foreground">
                 → {it.existDir ?? it.newDir}

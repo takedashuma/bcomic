@@ -192,12 +192,24 @@ export const CRAWL_PAGE = gql`
 `;
 
 export const CRAWL_13DL_LIST = gql`
-  mutation Crawl13dlList($categoryUrl: String, $chunkNo: Int!, $chunkSize: Int = 8) {
-    crawl13dlList(categoryUrl: $categoryUrl, chunkNo: $chunkNo, chunkSize: $chunkSize) {
+  mutation Crawl13dlList(
+    $categoryUrl: String
+    $pageNum: Int = 1
+    $startIdx: Int = 1
+    $endIdx: Int = 7
+  ) {
+    crawl13dlList(
+      categoryUrl: $categoryUrl
+      pageNum: $pageNum
+      startIdx: $startIdx
+      endIdx: $endIdx
+    ) {
       ok
       baseUrl
       pageUrl
-      chunkNo
+      pageNum
+      startIdx
+      endIdx
       totalItems
       items {
         title
@@ -254,6 +266,70 @@ export const CREATE_TITLE_FOLDER = gql`
       ok
       message
       path
+    }
+  }
+`;
+
+// ===== 比較標準 (UNREGIST → tb_bok) =====
+export const COMPARE_UNREGIST = gql`
+  query CompareUnregist {
+    compareUnregist {
+      ok
+      baseDir
+      totalEntries
+      entries {
+        folderPath
+        authorHead
+        authorTitleFolder
+        authorJa
+        titleJa
+        volumeNo
+        stockVolumes
+        stockCount
+        alreadyInDb
+        existingBokMid
+      }
+      logs
+    }
+  }
+`;
+
+export const EXCHANGE_DIR = gql`
+  mutation ExchangeDir($newDir: String!) {
+    exchangeDir(newDir: $newDir) {
+      ok
+      message
+      path
+    }
+  }
+`;
+
+export const DELETE_DB_AND_BOOK = gql`
+  mutation DeleteDBandBook($bookPath: String!) {
+    deleteDBandBook(bookPath: $bookPath) {
+      ok
+      message
+      path
+    }
+  }
+`;
+
+export const RENAME_REGIST_FOLDER = gql`
+  mutation RenameRegistFolder($oldDir: String!, $newDir: String!, $inRegist: Boolean = true) {
+    renameRegistFolder(oldDir: $oldDir, newDir: $newDir, inRegist: $inRegist) {
+      ok
+      message
+      path
+    }
+  }
+`;
+
+export const START_REGIST_UNREGIST_ALL = gql`
+  mutation StartRegistUnregistAll {
+    startRegistUnregistAll {
+      id
+      status
+      message
     }
   }
 `;
