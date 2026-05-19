@@ -5,9 +5,10 @@ import {
   START_EXTRACT_ALL,
   START_EXTRACT_ALL_ER,
   START_MERGE_ALL,
-  MOVE_FOLDER,
-  DELETE_TITLE_FOLDER,
-  CREATE_TITLE_FOLDER,
+  MOVE_TO_REGIST,
+  CREATE_REGIST_FOLDER,
+  DELETE_VOLUME_DB,
+  DELETE_VOLUME_DB_AND_DIR,
 } from "@/gql/operations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,13 @@ import { JobProgress } from "@/components/JobProgress";
  *  │  ↓ ジョブ進捗パネル
  *  │
  *  │  Search: [____] [Search]
- *  │  ↓ 結果テーブル(行ごとに [移動][削除][フォルダ作成])
+ *  │  ↓ 結果テーブル
+ *  │    行毎のボタン:
+ *  │      移動           : COMIC_ROOT/<folderPath> → REGIST_DIR/<folderPath>
+ *  │      タイトルフォルダ作成 : REGIST_DIR/<folderPath> を空フォルダで作成 (旧 makeFolder.php)
+ *  │      Delete DB     : tb_bok の該当行のみ削除 (FS は触らない)
+ *  │      Delete DB&Dir : tb_bok の該当行を削除 + COMIC_ROOT/<folderPath> も rm -rf
+ *  │    パスのテキストをクリック → 検索キーワード欄に流し込む
  *  └─────────────────
  */
 export function HomePage() {
@@ -39,11 +46,16 @@ export function HomePage() {
   const [q, setQ] = useState("");
   const [runSearch, searchState] = useLazyQuery(SEARCH_COMICS, { fetchPolicy: "network-only" });
 
-  // フォルダ操作
-  const [doMove] = useMutation(MOVE_FOLDER, { refetchQueries: ["SearchComics"] });
-  const [doDelete] = useMutation(DELETE_TITLE_FOLDER, { refetchQueries: ["SearchComics"] });
-  const [doCreate] = useMutation(CREATE_TITLE_FOLDER);
+  // 検索結果アクション (旧 admin_new 準拠)
+  const refetch = { refetchQueries: ["SearchComics"] };
+  const [doMove] = useMutation(MOVE_TO_REGIST, refetch);
+  const [doMakeFolder] = useMutation(CREATE_REGIST_FOLDER, refetch);
+  const [doDelDB] = useMutation(DELETE_VOLUME_DB, refetch);
+  const [doDelBoth] = useMutation(DELETE_VOLUME_DB_AND_DIR, refetch);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const setMsg = (r: any) =>
+    setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
 
   const onExtract = async () => {
     setExtractJobId(null);
@@ -61,34 +73,43 @@ export function HomePage() {
     if (data?.startExtractAllErArchives?.id) setErJobId(data.startExtractAllErArchives.id);
   };
 
-  const onMove = async (fromPath: string) => {
-    const toPath = window.prompt("移動先のパスを入力 (STAGING_ROOT 配下)", fromPath);
-    if (!toPath || toPath === fromPath) return;
-    const { data } = await doMove({ variables: { fromPath, toPath } });
-    setActionMsg(
-      data?.moveFolder
-        ? { ok: data.moveFolder.ok, text: data.moveFolder.message }
-        : { ok: false, text: "API応答なし" }
-    );
+  /** 移動: COMIC_ROOT/<folderPath> → REGIST_DIR/<folderPath> */
+  const onMove = async (folderPath: string) => {
+    if (!window.confirm(`REGIST_DIR へ移動しますか？\n${folderPath}`)) return;
+    const { data } = await doMove({ variables: { folderPath } });
+    setMsg(data?.moveToRegist);
   };
-  const onDelete = async (folderPath: string) => {
-    if (!window.confirm(`削除しますか？\n${folderPath}\n(.__trash に退避)`)) return;
-    const { data } = await doDelete({ variables: { folderPath, permanent: false } });
-    setActionMsg(
-      data?.deleteTitleFolder
-        ? { ok: data.deleteTitleFolder.ok, text: data.deleteTitleFolder.message }
-        : { ok: false, text: "API応答なし" }
-    );
+  /** タイトルフォルダ作成: REGIST_DIR/<folderPath> を空で mkdir -p */
+  const onMakeFolder = async (folderPath: string) => {
+    if (!window.confirm(`REGIST_DIR に同名フォルダを作成しますか？\n${folderPath}`)) return;
+    const { data } = await doMakeFolder({ variables: { folderPath } });
+    setMsg(data?.createRegistFolder);
   };
-  const onCreate = async (parentPath: string) => {
-    const name = window.prompt("新規タイトルフォルダ名");
-    if (!name) return;
-    const { data } = await doCreate({ variables: { parentPath, name } });
-    setActionMsg(
-      data?.createTitleFolder
-        ? { ok: data.createTitleFolder.ok, text: data.createTitleFolder.message }
-        : { ok: false, text: "API応答なし" }
-    );
+  /** Delete DB: tb_bok の該当行のみ */
+  const onDeleteDB = async (id: number) => {
+    if (!window.confirm(`tb_bok から削除しますか？\nid=${id} (FS は残します)`)) return;
+    const { data } = await doDelDB({ variables: { id } });
+    setMsg(data?.deleteVolumeDB);
+  };
+  /** Delete DB & Dir: tb_bok + COMIC_ROOT/<folderPath> */
+  const onDeleteBoth = async (id: number, folderPath: string) => {
+    if (
+      !window.confirm(
+        `tb_bok の該当行 と COMIC_ROOT のフォルダを削除しますか？\nid=${id}\n${folderPath}`
+      )
+    ) {
+      return;
+    }
+    const { data } = await doDelBoth({ variables: { id, folderPath } });
+    setMsg(data?.deleteVolumeDBAndDir);
+  };
+
+  /** パスのテキスト/著者/タイトルをクリックで検索キーワードに流し込み */
+  const setQAndSearch = (kw: string) => {
+    const text = (kw || "").trim();
+    if (!text) return;
+    setQ(text);
+    runSearch({ variables: { q: text } });
   };
 
   return (
@@ -120,7 +141,7 @@ export function HomePage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="検索文字列"
+            placeholder="検索文字列（タイトル/著者/パス）"
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.nativeEvent.isComposing && q) {
                 runSearch({ variables: { q } });
@@ -158,7 +179,7 @@ export function HomePage() {
                     <th className="text-left p-1.5 font-medium w-14">ID</th>
                     <th className="text-left p-1.5 font-medium">著者 / タイトル / 巻</th>
                     <th className="text-left p-1.5 font-medium">パス</th>
-                    <th className="text-left p-1.5 font-medium w-48">操作</th>
+                    <th className="text-left p-1.5 font-medium w-[24rem]">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -166,13 +187,34 @@ export function HomePage() {
                     <tr key={v.id} className="border-t align-top">
                       <td className="p-1.5 tabular-nums">{v.id}</td>
                       <td className="p-1.5">
-                        <div className="font-medium">{v.titleJa || v.titleEn}</div>
-                        <div className="text-muted-foreground">{v.authorJa || v.authorEn}</div>
+                        <button
+                          type="button"
+                          onClick={() => setQAndSearch(v.titleJa || v.titleEn)}
+                          className="text-left font-medium hover:underline text-primary"
+                        >
+                          {v.titleJa || v.titleEn || "—"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setQAndSearch(v.authorJa || v.authorEn)}
+                          className="block text-left text-muted-foreground hover:underline"
+                        >
+                          {v.authorJa || v.authorEn || "—"}
+                        </button>
                         <div className="text-xs text-muted-foreground">
                           巻 {v.no} / {v.vch9}
                         </div>
                       </td>
-                      <td className="p-1.5 font-mono break-all">{v.folderPath}</td>
+                      <td className="p-1.5">
+                        <button
+                          type="button"
+                          onClick={() => v.folderPath && setQAndSearch(v.folderPath)}
+                          className="text-left font-mono break-all hover:underline text-primary"
+                          title="クリックで検索キーワードに反映"
+                        >
+                          {v.folderPath}
+                        </button>
+                      </td>
                       <td className="p-1.5">
                         <div className="flex flex-wrap gap-1">
                           <Button
@@ -184,17 +226,24 @@ export function HomePage() {
                           </Button>
                           <Button
                             size="sm"
-                            variant="destructive"
-                            onClick={() => v.folderPath && onDelete(v.folderPath)}
+                            variant="outline"
+                            onClick={() => v.folderPath && onMakeFolder(v.folderPath)}
                           >
-                            削除
+                            タイトルフォルダ作成
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            onClick={() => v.folderPath && onCreate(v.folderPath)}
+                            variant="destructive"
+                            onClick={() => onDeleteDB(v.id)}
                           >
-                            タイトルフォルダ作成
+                            Delete DB
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => v.folderPath && onDeleteBoth(v.id, v.folderPath)}
+                          >
+                            Delete DB&Dir
                           </Button>
                         </div>
                       </td>

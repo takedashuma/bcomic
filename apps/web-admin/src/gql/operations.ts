@@ -333,3 +333,60 @@ export const START_REGIST_UNREGIST_ALL = gql`
     }
   }
 `;
+
+// ===== Home 検索結果アクション (旧admin_new準拠) =====
+export const MOVE_TO_REGIST = gql`
+  mutation MoveToRegist($folderPath: String!) {
+    moveToRegist(folderPath: $folderPath) {
+      ok
+      message
+      path
+    }
+  }
+`;
+export const CREATE_REGIST_FOLDER = gql`
+  mutation CreateRegistFolder($folderPath: String!) {
+    createRegistFolder(folderPath: $folderPath) {
+      ok
+      message
+      path
+    }
+  }
+`;
+export const DELETE_VOLUME_DB = gql`
+  mutation DeleteVolumeDB($id: Int!) {
+    deleteVolumeDB(id: $id) {
+      ok
+      message
+      path
+    }
+  }
+`;
+export const DELETE_VOLUME_DB_AND_DIR = gql`
+  mutation DeleteVolumeDBAndDir($id: Int!, $folderPath: String!) {
+    deleteVolumeDBAndDir(id: $id, folderPath: $folderPath) {
+      ok
+      message
+      path
+    }
+  }
+`;
+
+// ===== Unknown 検索 (REGIST_DIR/0 配下) =====
+export const LIST_UNKNOWN_FOLDERS = gql`
+  query ListUnknownFolders {
+    listUnknownFolders {
+      ok
+      baseDir
+      total
+      items {
+        folderName
+        folderPath
+        title
+        titleEN
+        titleJP
+      }
+      logs
+    }
+  }
+`;

@@ -59,6 +59,25 @@ export const typeDefs = gql`
     pageSize: Int!
   }
 
+  """
+  REGIST_DIR/0 配下の Unknown フォルダ。
+  フォルダ名形式: "[Unknown;Unknown] EnglishTitle;日本語タイトル"
+  """
+  type UnknownFolderItem {
+    folderName: String!
+    folderPath: String!
+    title: String!
+    titleEN: String!
+    titleJP: String!
+  }
+  type UnknownFoldersResult {
+    ok: Boolean!
+    baseDir: String!
+    items: [UnknownFolderItem!]!
+    total: Int!
+    logs: [String!]!
+  }
+
   type ExternalCandidate {
     sourceSite: String!
     titleJa: String!
@@ -183,6 +202,11 @@ export const typeDefs = gql`
     """
     compareUnregist: UnregistCompareResult!
     """
+    旧 search_unknown.php の代替。
+    REGIST_DIR/0 配下の Unknown フォルダ一覧を返す。
+    """
+    listUnknownFolders: UnknownFoldersResult!
+    """
     非同期ジョブの進捗を取得（フロントは polling で完了検知）
     """
     jobStatus(id: ID!): Job
@@ -259,16 +283,36 @@ export const typeDefs = gql`
 
     # ----- 検索結果に対するフォルダ操作 -----
     """
-    タイトルフォルダの丸ごと移動（rename）
+    タイトルフォルダの丸ごと移動（rename） / 旧コード互換
     """
     moveFolder(fromPath: String!, toPath: String!): FolderOpResult!
     """
-    タイトル削除。デフォルトは .__trash 配下に退避。permanent=true で物理削除
+    タイトル削除。デフォルトは .__trash 配下に退避。permanent=true で物理削除 / 旧コード互換
     """
     deleteTitleFolder(folderPath: String!, permanent: Boolean = false): FolderOpResult!
     """
-    タイトルフォルダの新規作成
+    タイトルフォルダの新規作成（任意パス配下） / 旧コード互換
     """
     createTitleFolder(parentPath: String!, name: String!): FolderOpResult!
+
+    # ----- 検索結果に対する新仕様アクション (旧admin_new準拠) -----
+    """
+    COMIC_ROOT/<folderPath> を REGIST_DIR/<folderPath> へ移動。
+    例: folderPath = "/H/[HaraYasuhisa;原泰久] Kingdom;キングダム"
+    """
+    moveToRegist(folderPath: String!): FolderOpResult!
+    """
+    旧 admin_new/makeFolder.php 代替。
+    REGIST_DIR/<folderPath> を空フォルダで mkdir -p。
+    """
+    createRegistFolder(folderPath: String!): FolderOpResult!
+    """
+    tb_bok の該当 id 行だけを削除 (FSは触らない)
+    """
+    deleteVolumeDB(id: Int!): FolderOpResult!
+    """
+    tb_bok の該当 id 行を削除 + COMIC_ROOT/<folderPath> を rm -rf
+    """
+    deleteVolumeDBAndDir(id: Int!, folderPath: String!): FolderOpResult!
   }
 `;

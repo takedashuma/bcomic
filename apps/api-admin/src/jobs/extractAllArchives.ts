@@ -78,8 +78,20 @@ export function parseArchiveBaseName(baseName: string): { title: string; volume:
     return { title: normalized, volume: null };
   }
 
-  let m = /^(.+?)[\s_]+v(?:ol\.?)?\s*(\d+)$/i.exec(normalized);
+  // "Title v07" / "Title_v07" / "Titlev07" / "Title vol.07" → title="Title" / volume="07"
+  // 区切り (空白/アンダースコア) は任意。
+  let m = /^(.+?)[\s_]*v(?:ol\.?)?\s*(\d+)$/i.exec(normalized);
   if (m) return { title: m[1].trim().replace(/[\s_]+$/, ""), volume: padVolume(parseInt(m[2], 10)) };
+
+  // "Title 02s" / "Title_02s" / "Title02s" → title="Title" / volume="02s"
+  // 特装版・特別編 等の数字+s 接尾辞を保持する
+  m = /^(.+?)[\s_]*(\d+)s$/i.exec(normalized);
+  if (m) {
+    const title = m[1].trim().replace(/[\s_]+$/, "");
+    if (title) {
+      return { title, volume: padVolume(parseInt(m[2], 10)) + "s" };
+    }
+  }
 
   m = /^(.+?)[\s_]*(?:第\s*)?(\d+)\s*巻$/.exec(normalized);
   if (m) return { title: m[1].trim().replace(/[\s_]+$/, ""), volume: padVolume(parseInt(m[2], 10)) };
@@ -93,9 +105,11 @@ export function parseArchiveBaseName(baseName: string): { title: string; volume:
 }
 
 /**
- * 内側のフォルダ名から巻数を抽出 (優先順:第NN巻 > vNN > 末尾数字 > 先頭数字)。
+ * 内側のフォルダ名から巻数を抽出 (優先順: 第NN巻 > vNN > NNs > 末尾数字 > 先頭数字)。
  *   "[一分咲×白鳥うしお] 元、…THE COMIC 第01巻" → "01"
  *   "Moto_ochikobore_koshaku_v04"               → "04"
+ *   "Title_02s"                                  → "02s"   (特装版・特別編 等)
+ *   "02s"                                        → "02s"
  *   "01"                                         → "01"
  */
 export function parseInnerFolderToVolume(name: string): string {
@@ -104,6 +118,9 @@ export function parseInnerFolderToVolume(name: string): string {
   if (m) return padVolume(parseInt(m[1], 10));
   m = /[vV](?:ol\.?)?\s*(\d+)(?!\s*[-〜~])/i.exec(normalized);
   if (m) return padVolume(parseInt(m[1], 10));
+  // 末尾が「数字+s」(特装版・特別編 等の命名規約) → "02s" を保持
+  m = /(\d+)s\s*$/i.exec(normalized);
+  if (m) return padVolume(parseInt(m[1], 10)) + "s";
   m = /(\d+)\s*$/.exec(normalized);
   if (m) return padVolume(parseInt(m[1], 10));
   m = /(\d+)/.exec(normalized);

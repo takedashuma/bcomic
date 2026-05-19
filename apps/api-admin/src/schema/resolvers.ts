@@ -12,12 +12,19 @@ import { searchMangaKingdom } from "../jobs/searchMangaKingdom.js";
 import { crawl13dl, crawl13dlList } from "../jobs/crawl13dl.js";
 import { makeRegistDir } from "../jobs/registDir.js";
 import { compareUnregist } from "../jobs/compareUnregist.js";
+import { listUnknownFolders } from "../jobs/listUnknownFolders.js";
 import { exchangeDir, deleteDBandBook, renameRegistFolder } from "../jobs/compareOps.js";
 import { startRegistUnregistAll } from "../jobs/registUnregist.js";
 import { startExtractAllArchives } from "../jobs/extractAllArchives.js";
 import { startMergeAllChapters } from "../jobs/mergeAllChapters.js";
 import { getJob } from "../jobs/jobStore.js";
 import { moveFolder, deleteTitleFolder, createTitleFolder } from "../jobs/folderOps.js";
+import {
+  moveToRegist,
+  createRegistFolder,
+  deleteVolumeDB,
+  deleteVolumeDBAndDir,
+} from "../jobs/comicRootOps.js";
 
 const DateTimeScalar = new GraphQLScalarType({
   name: "DateTime",
@@ -128,6 +135,11 @@ export const resolvers: any = {
     async compareUnregist(_: any, __: any, ctx: AdminContext) {
       requireAdmin(ctx);
       return compareUnregist();
+    },
+
+    async listUnknownFolders(_: any, __: any, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return listUnknownFolders();
     },
   },
 
@@ -299,6 +311,28 @@ export const resolvers: any = {
     async startRegistUnregistAll(_: any, __: any, ctx: AdminContext) {
       requireAdmin(ctx);
       return startRegistUnregistAll();
+    },
+
+    // ===== 検索結果アクション (旧admin_new準拠) =====
+    async moveToRegist(_: any, args: { folderPath: string }, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return moveToRegist(args.folderPath);
+    },
+    async createRegistFolder(_: any, args: { folderPath: string }, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return createRegistFolder(args.folderPath);
+    },
+    async deleteVolumeDB(_: any, args: { id: number }, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return deleteVolumeDB(args.id);
+    },
+    async deleteVolumeDBAndDir(
+      _: any,
+      args: { id: number; folderPath: string },
+      ctx: AdminContext
+    ) {
+      requireAdmin(ctx);
+      return deleteVolumeDBAndDir(args.id, args.folderPath);
     },
   },
 };
