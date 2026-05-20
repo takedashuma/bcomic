@@ -29,10 +29,13 @@ async function copyRecursive(src: string, dst: string) {
 }
 
 /**
- * COMIC_ROOT/<folderPath> を REGIST_DIR/<folderPath> へ移動。
+ * COMIC_ROOT/<folderPath> を REGIST_DIR/<folderPath> へ移動し、
+ * かつ tb_bok の該当タイトル配下の全巻レコードも削除する。
+ *
  *   ex) folderPath="/H/[HaraYasuhisa;原泰久] Kingdom;キングダム"
  *       → mv /comics/H/[HaraYasuhisa;原泰久] Kingdom;キングダム
  *            → /regist/H/[HaraYasuhisa;原泰久] Kingdom;キングダム
+ *       → tb_bok の bok_txt1 が folderPath で始まる行を全部 deleteMany
  *
  * mount を跨ぐ場合 rename が EXDEV になるので、その時は copy + rm の保険。
  */
@@ -52,18 +55,44 @@ export async function moveToRegist(folderPath: string) {
     return { ok: false, message: `元フォルダが見つかりません: ${src}`, path: null };
   }
   await fs.mkdir(path.dirname(dst), { recursive: true });
+  let movedMsg = "";
   try {
     await fs.rename(src, dst);
-    return { ok: true, message: `移動: ${src} → ${dst}`, path: dst };
+    movedMsg = `移動: ${src} → ${dst}`;
   } catch (e: any) {
     if (e?.code === "EXDEV") {
       // cross-device → copy + rm
-      await copyRecursive(src, dst);
-      await fs.rm(src, { recursive: true, force: true });
-      return { ok: true, message: `移動(copy): ${src} → ${dst}`, path: dst };
+      try {
+        await copyRecursive(src, dst);
+        await fs.rm(src, { recursive: true, force: true });
+        movedMsg = `移動(copy): ${src} → ${dst}`;
+      } catch (ce: any) {
+        return { ok: false, message: `移動失敗(copy): ${ce.message}`, path: null };
+      }
+    } else {
+      return { ok: false, message: `移動失敗: ${e.message}`, path: null };
     }
-    return { ok: false, message: `移動失敗: ${e.message}`, path: null };
   }
+
+  // tb_bok から該当タイトル配下の全巻レコードを削除
+  //   bok_txt1 が "<folderPath>" 自身 または "<folderPath>/..." で始まる行を対象
+  const norm = "/" + folderPath.replace(/^\/+/, "").replace(/\/+$/, "");
+  let dbMsg = "";
+  try {
+    const r = await prisma.volume.deleteMany({
+      where: {
+        OR: [
+          { folderPath: norm },
+          { folderPath: { startsWith: norm + "/" } },
+        ],
+      },
+    });
+    dbMsg = ` / tb_bok から ${r.count} 件削除`;
+  } catch (e: any) {
+    dbMsg = ` / [warn] tb_bok 削除失敗: ${e.message}`;
+  }
+
+  return { ok: true, message: movedMsg + dbMsg, path: dst };
 }
 
 /**

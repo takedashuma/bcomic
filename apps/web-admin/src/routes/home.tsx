@@ -73,16 +73,46 @@ export function HomePage() {
     if (data?.startExtractAllErArchives?.id) setErJobId(data.startExtractAllErArchives.id);
   };
 
-  /** 移動: COMIC_ROOT/<folderPath> → REGIST_DIR/<folderPath> */
+  /**
+   * 巻フォルダ部分を除去してタイトルフォルダのパスを返す。
+   *   "/H/[HaraYasuhisa;原泰久] Kingdom;キングダム -KINGDOM-/05"
+   *     → "/H/[HaraYasuhisa;原泰久] Kingdom;キングダム -KINGDOM-"
+   */
+  const titleFolderPath = (folderPath: string): string => {
+    if (!folderPath) return folderPath;
+    const trimmed = folderPath.replace(/\/+$/, "");
+    const idx = trimmed.lastIndexOf("/");
+    if (idx <= 0) return trimmed;
+    return trimmed.slice(0, idx);
+  };
+
+  /**
+   * 移動: タイトル配下の全ての巻を一括で REGIST_DIR へ移動 + tb_bok の該当全巻を削除。
+   *   COMIC_ROOT/<titleFolderPath> → REGIST_DIR/<titleFolderPath>
+   *   tb_bok から bok_txt1 が <titleFolderPath>/... で始まる行を全削除
+   */
   const onMove = async (folderPath: string) => {
-    if (!window.confirm(`REGIST_DIR へ移動しますか？\n${folderPath}`)) return;
-    const { data } = await doMove({ variables: { folderPath } });
+    const titlePath = titleFolderPath(folderPath);
+    if (
+      !window.confirm(
+        `タイトル配下の全ての巻を REGIST_DIR へ移動し、\n` +
+          `tb_bok の該当全巻レコードも削除します。\n` +
+          `実行しますか？\n${titlePath}`
+      )
+    ) {
+      return;
+    }
+    const { data } = await doMove({ variables: { folderPath: titlePath } });
     setMsg(data?.moveToRegist);
   };
-  /** タイトルフォルダ作成: REGIST_DIR/<folderPath> を空で mkdir -p */
+  /**
+   * タイトルフォルダ作成: 著者/タイトル レベルのフォルダを REGIST_DIR に空で mkdir -p。
+   *   巻フォルダは作らない。
+   */
   const onMakeFolder = async (folderPath: string) => {
-    if (!window.confirm(`REGIST_DIR に同名フォルダを作成しますか？\n${folderPath}`)) return;
-    const { data } = await doMakeFolder({ variables: { folderPath } });
+    const titlePath = titleFolderPath(folderPath);
+    if (!window.confirm(`REGIST_DIR にタイトルフォルダを作成しますか？\n${titlePath}`)) return;
+    const { data } = await doMakeFolder({ variables: { folderPath: titlePath } });
     setMsg(data?.createRegistFolder);
   };
   /** Delete DB: tb_bok の該当行のみ */
@@ -177,8 +207,8 @@ export function HomePage() {
                 <thead className="bg-muted sticky top-0">
                   <tr>
                     <th className="text-left p-1.5 font-medium w-14">ID</th>
-                    <th className="text-left p-1.5 font-medium">著者 / タイトル / 巻</th>
                     <th className="text-left p-1.5 font-medium">パス</th>
+                    <th className="text-left p-1.5 font-medium w-24">巻</th>
                     <th className="text-left p-1.5 font-medium w-[24rem]">操作</th>
                   </tr>
                 </thead>
@@ -189,31 +219,16 @@ export function HomePage() {
                       <td className="p-1.5">
                         <button
                           type="button"
-                          onClick={() => setQAndSearch(v.titleJa || v.titleEn)}
-                          className="text-left font-medium hover:underline text-primary"
-                        >
-                          {v.titleJa || v.titleEn || "—"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setQAndSearch(v.authorJa || v.authorEn)}
-                          className="block text-left text-muted-foreground hover:underline"
-                        >
-                          {v.authorJa || v.authorEn || "—"}
-                        </button>
-                        <div className="text-xs text-muted-foreground">
-                          巻 {v.no} / {v.vch9}
-                        </div>
-                      </td>
-                      <td className="p-1.5">
-                        <button
-                          type="button"
                           onClick={() => v.folderPath && setQAndSearch(v.folderPath)}
                           className="text-left font-mono break-all hover:underline text-primary"
                           title="クリックで検索キーワードに反映"
                         >
                           {v.folderPath}
                         </button>
+                      </td>
+                      <td className="p-1.5">
+                        <div className="font-medium tabular-nums">{v.no || "—"}</div>
+                        <div className="text-muted-foreground">{v.vch9}</div>
                       </td>
                       <td className="p-1.5">
                         <div className="flex flex-wrap gap-1">
