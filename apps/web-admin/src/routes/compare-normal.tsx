@@ -6,6 +6,7 @@ import {
   DELETE_DB_AND_BOOK,
   RENAME_REGIST_FOLDER,
   START_REGIST_UNREGIST_ALL,
+  START_REGIST_ER_UNREGIST_ALL,
 } from "@/gql/operations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,8 +57,10 @@ export function CompareNormalPage() {
   const [doDelete] = useMutation(DELETE_DB_AND_BOOK);
   const [doRename] = useMutation(RENAME_REGIST_FOLDER);
   const [doRegist, registState] = useMutation(START_REGIST_UNREGIST_ALL);
+  const [doRegistEr, registErState] = useMutation(START_REGIST_ER_UNREGIST_ALL);
 
   const [registJobId, setRegistJobId] = useState<string | null>(null);
+  const [registErJobId, setRegistErJobId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // stock 個別アクション完了済みをパスごとに灰色表示する
   const [doneStocks, setDoneStocks] = useState<Set<string>>(new Set());
@@ -141,6 +144,22 @@ export function CompareNormalPage() {
     }
   };
 
+  const onRegistEr = async () => {
+    if (
+      !window.confirm(
+        "ER_DEST_DIR 配下の全エントリを tb_bok に登録 (bok_vch9='adult') し、\n" +
+          "ER_COMIC_ROOT にコピー後 ER_DEST_DIR を空にします。\n実行しますか？"
+      )
+    ) {
+      return;
+    }
+    setRegistErJobId(null);
+    const { data } = await doRegistEr();
+    if (data?.startRegistErUnregistAll?.id) {
+      setRegistErJobId(data.startRegistErUnregistAll.id);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">比較標準</h2>
@@ -152,6 +171,14 @@ export function CompareNormalPage() {
           </Button>
           <Button variant="default" onClick={onRegist} disabled={registState.loading}>
             {registState.loading ? "起動中…" : "NormalComic登録"}
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onRegistEr}
+            disabled={registErState.loading}
+            title="ER_DEST_DIR → ER_COMIC_ROOT に登録 (bok_vch9='adult')"
+          >
+            {registErState.loading ? "起動中…" : "ERO Comic登録"}
           </Button>
           {result && (
             <span className="text-xs text-muted-foreground tabular-nums ml-auto">
@@ -174,6 +201,7 @@ export function CompareNormalPage() {
         )}
 
         <JobProgress jobId={registJobId} />
+        <JobProgress jobId={registErJobId} />
 
         {result && result.logs && result.logs.length > 0 && (
           <details className="text-xs text-muted-foreground">
