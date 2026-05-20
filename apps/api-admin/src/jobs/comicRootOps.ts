@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "../db.js";
 import { COMIC_ROOT, resolveUnderRoot } from "../util/path.js";
+import { runCmd } from "./runtime.js";
 
 /**
  * 検索結果（COMIC_ROOT 内のタイトル）に対する操作群。
@@ -17,15 +18,39 @@ function registRoot(): string | null {
   return r ? path.resolve(r) : null;
 }
 
-async function copyRecursive(src: string, dst: string) {
-  const st = await fs.stat(src);
-  if (st.isDirectory()) {
-    await fs.mkdir(dst, { recursive: true });
-    const entries = await fs.readdir(src);
-    for (const e of entries) await copyRecursive(path.join(src, e), path.join(dst, e));
-  } else {
-    await fs.copyFile(src, dst);
+/**
+ * src ディレクトリ配下のファイル数を再帰カウント (NFC/NFD どちらでも到達)
+ */
+async function countFilesRecursive(p: string): Promise<number> {
+  const variants = Array.from(new Set([p, p.normalize("NFC"), p.normalize("NFD")]));
+  for (const v of variants) {
+    try {
+      const st = await fs.stat(v);
+      if (!st.isDirectory()) return 1;
+      const entries = await fs.readdir(v);
+      let n = 0;
+      for (const e of entries) {
+        n += await countFilesRecursive(path.join(v, e));
+      }
+      return n;
+    } catch {
+      /* try next variant */
+    }
   }
+  return 0;
+}
+
+/**
+ * 中身ごとコピー (cp -a)。
+ * 日本語 NFC/NFD ミスマッチが起きやすい JS の fs.readdir/copyFile より
+ * シェルの cp -a の方が堅牢 (busybox/GNU coreutils 共通動作)。
+ *
+ * cp -a で src ディレクトリ自身を dst の中に作るのではなく、src の中身を dst にコピーするため
+ *   "cp -a <src>/. <dst>"  という形式を使う (末尾の /. が肝)。
+ * dst は事前に mkdir -p 済みである必要がある。
+ */
+async function copyDirContents(src: string, dst: string): Promise<{ code: number; logs: string[] }> {
+  return runCmd("cp", ["-a", src + "/.", dst]);
 }
 
 /**
@@ -56,19 +81,40 @@ export async function moveToRegist(folderPath: string) {
   }
   await fs.mkdir(path.dirname(dst), { recursive: true });
   let movedMsg = "";
+  const srcFileCount = await countFilesRecursive(src);
   try {
+    // 同一ファイルシステム内なら rename が最速
     await fs.rename(src, dst);
-    movedMsg = `移動: ${src} → ${dst}`;
+    movedMsg = `移動(rename): ${src} → ${dst} (${srcFileCount} files)`;
   } catch (e: any) {
     if (e?.code === "EXDEV") {
-      // cross-device → copy + rm
-      try {
-        await copyRecursive(src, dst);
-        await fs.rm(src, { recursive: true, force: true });
-        movedMsg = `移動(copy): ${src} → ${dst}`;
-      } catch (ce: any) {
-        return { ok: false, message: `移動失敗(copy): ${ce.message}`, path: null };
+      // cross-device → cp -a + rm -rf
+      // (Docker bind mount 同士は別 mount 扱いになるためここに来る)
+      await fs.mkdir(dst, { recursive: true });
+      const cpRes = await copyDirContents(src, dst);
+      if (cpRes.code !== 0) {
+        return {
+          ok: false,
+          message:
+            `cp -a 失敗 (code=${cpRes.code}): ` +
+            cpRes.logs.slice(-10).join(" | "),
+          path: null,
+        };
       }
+      // コピーが完全に終わったことを確認 (ファイル数比較)
+      const dstFileCount = await countFilesRecursive(dst);
+      if (dstFileCount < srcFileCount) {
+        return {
+          ok: false,
+          message:
+            `コピー不完全: src=${srcFileCount}件 dst=${dstFileCount}件 ` +
+            `(src は削除せず残しています: ${src})`,
+          path: null,
+        };
+      }
+      // src を削除
+      await fs.rm(src, { recursive: true, force: true });
+      movedMsg = `移動(cp -a): ${src} → ${dst} (${dstFileCount}/${srcFileCount} files)`;
     } else {
       return { ok: false, message: `移動失敗: ${e.message}`, path: null };
     }
