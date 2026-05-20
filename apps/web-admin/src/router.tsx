@@ -4,7 +4,6 @@ import { LoginPage } from "./routes/login";
 import { HomePage } from "./routes/home";
 import { UnknownPage } from "./routes/unknown";
 import { CompareNormalPage } from "./routes/compare-normal";
-import { CompareEroPage } from "./routes/compare-ero";
 import { SearchPagePage } from "./routes/search-page";
 
 const rootRoute = createRootRoute({ component: () => <Outlet /> });
@@ -36,11 +35,6 @@ const compareNormalRoute = createRoute({
   path: "/compare-normal",
   component: CompareNormalPage,
 });
-const compareEroRoute = createRoute({
-  getParentRoute: () => authedRoute,
-  path: "/compare-ero",
-  component: CompareEroPage,
-});
 const searchPageRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: "/search-page",
@@ -53,7 +47,6 @@ const routeTree = rootRoute.addChildren([
     homeRoute,
     unknownRoute,
     compareNormalRoute,
-    compareEroRoute,
     searchPageRoute,
   ]),
 ]);

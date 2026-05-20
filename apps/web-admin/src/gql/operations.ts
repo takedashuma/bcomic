@@ -131,27 +131,6 @@ export const COMPARE_NORMAL = gql`
     }
   }
 `;
-export const COMPARE_ERO = gql`
-  query CompareEro($folderPath: String!) {
-    compareEro(folderPath: $folderPath) {
-      folderPath
-      existingVolume {
-        id
-        authorJa
-        titleJa
-        no
-        vch9
-      }
-      parsedAuthorEn
-      parsedTitleEn
-      parsedAuthorJa
-      parsedTitleJa
-      parsedNo
-      differences
-      canRegister
-    }
-  }
-`;
 export const REGISTER_NORMAL = gql`
   mutation RegisterNormal($input: RegisterInput!) {
     registerNormalComic(input: $input) {
@@ -332,6 +311,16 @@ export const RENAME_REGIST_FOLDER = gql`
 export const START_REGIST_UNREGIST_ALL = gql`
   mutation StartRegistUnregistAll {
     startRegistUnregistAll {
+      id
+      status
+      message
+    }
+  }
+`;
+
+export const START_REGIST_ER_UNREGIST_ALL = gql`
+  mutation StartRegistErUnregistAll {
+    startRegistErUnregistAll {
       id
       status
       message

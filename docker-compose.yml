@@ -73,6 +73,8 @@ services:
       REGIST_DIR: ${REGIST_DIR:-/download_root/Regist}
       # ERComic 解凍後の整理先 (旧 /volume1/public/ERC/uDownloading 相当)
       ER_DEST_DIR: ${ER_DEST_DIR:-/erc}
+      # ERO Comic 登録後の最終格納先 (旧 /volume1/public/ERC/003 相当)
+      ER_COMIC_ROOT: ${ER_COMIC_ROOT:-/erc003}
       ADMIN_CORS_ORIGINS: ${ADMIN_CORS_ORIGINS:-http://localhost:5174,http://localhost:8081}
       ADMIN_PORT: 4001
       NODE_ENV: production
@@ -85,8 +87,10 @@ services:
       # /Volumes/public/Download をまとめて1マウント（rename が cross-device にならないため）
       # 配下: /Zip /Unzip /zFin /Chapter
       - ${DOWNLOAD_ROOT_HOST:-/Volumes/public/Download}:${DOWNLOAD_ROOT_CONTAINER:-/download_root}
-      # ERComic 整理先 (旧 /volume1/public/ERC 相当)
-      - ${ER_DEST_HOST:-/Volumes/public/ERC}:${ER_DEST_DIR:-/erc}
+      # ERComic 整理先 (旧 /volume1/public/ERC/uDownloading 相当)
+      - ${ER_DEST_HOST:-/Volumes/public/ERC/uDownloading}:${ER_DEST_DIR:-/erc}
+      # ERO Comic 登録後の最終格納先 (旧 /volume1/public/ERC/003 相当)
+      - ${ER_COMIC_ROOT_HOST:-/Volumes/public/ERC/003}:${ER_COMIC_ROOT:-/erc003}
     ports:
       - "${ADMIN_API_PORT:-4001}:4001"
     networks:

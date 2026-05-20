@@ -290,6 +290,11 @@ export const typeDefs = gql`
     COMIC_ROOT へコピー後 REGIST_DIR を空にする (非同期ジョブ)
     """
     startRegistUnregistAll: Job!
+    """
+    ER_DEST_DIR 配下の全ての /initial/authorKey/titleFolder を tb_bok に登録 (bok_vch9='adult')、
+    ER_COMIC_ROOT (旧 ERC/003) へコピー後 ER_DEST_DIR を空にする (非同期ジョブ)
+    """
+    startRegistErUnregistAll: Job!
 
     # ----- 検索結果に対するフォルダ操作 -----
     """

@@ -15,6 +15,7 @@ import { compareUnregist } from "../jobs/compareUnregist.js";
 import { listUnknownFolders } from "../jobs/listUnknownFolders.js";
 import { exchangeDir, deleteDBandBook, renameRegistFolder } from "../jobs/compareOps.js";
 import { startRegistUnregistAll } from "../jobs/registUnregist.js";
+import { startRegistErUnregistAll } from "../jobs/registErUnregist.js";
 import { startExtractAllArchives } from "../jobs/extractAllArchives.js";
 import { startExtractErComic } from "../jobs/extractErComic.js";
 import { startMergeAllChapters } from "../jobs/mergeAllChapters.js";
@@ -303,6 +304,10 @@ export const resolvers: any = {
     async startRegistUnregistAll(_: any, __: any, ctx: AdminContext) {
       requireAdmin(ctx);
       return startRegistUnregistAll();
+    },
+    async startRegistErUnregistAll(_: any, __: any, ctx: AdminContext) {
+      requireAdmin(ctx);
+      return startRegistErUnregistAll();
     },
 
     // ===== 検索結果アクション (旧admin_new準拠) =====

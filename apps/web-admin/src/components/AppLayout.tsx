@@ -8,7 +8,6 @@ const NAV = [
   { to: "/", label: "Home" },
   { to: "/unknown", label: "Unknown検索" },
   { to: "/compare-normal", label: "比較標準" },
-  { to: "/compare-ero", label: "比較E" },
   { to: "/search-page", label: "Page取得" },
 ];
 
