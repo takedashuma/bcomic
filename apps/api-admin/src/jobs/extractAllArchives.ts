@@ -353,10 +353,20 @@ async function extractOne(
   );
   await ensureDir(tempDir);
 
-  let r: { code: number; logs: string[] };
-  if (ext === ".zip" || ext === ".cbz" || ext === ".7z") {
-    r = await runCmd("7z", ["x", "-y", `-o${tempDir}`, archivePath]);
-  } else {
+  // 解凍コマンド
+  //   1) 7z x を最優先 (zip/7z はもちろん、p7zip-full は RAR3 まで対応 / UTF-8 OK)
+  //   2) .rar/.cbr で 7z が失敗した場合のみ unrar-free にフォールバック
+  // ※ unrar-free は非ASCII ファイル名で
+  //   "Pathname cannot be converted from UTF-16BE to current locale" を吐くため
+  //   7z を優先する
+  let r: { code: number; logs: string[] } = await runCmd("7z", [
+    "x",
+    "-y",
+    `-o${tempDir}`,
+    archivePath,
+  ]);
+  if (r.code !== 0 && (ext === ".rar" || ext === ".cbr")) {
+    appendLog(jobId, "  7z 失敗、unrar-free でリトライ");
     r = await runCmd("unrar-free", ["-x", archivePath, tempDir]);
   }
   for (const line of r.logs) appendLog(jobId, line);

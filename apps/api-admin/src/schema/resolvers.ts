@@ -16,6 +16,7 @@ import { listUnknownFolders } from "../jobs/listUnknownFolders.js";
 import { exchangeDir, deleteDBandBook, renameRegistFolder } from "../jobs/compareOps.js";
 import { startRegistUnregistAll } from "../jobs/registUnregist.js";
 import { startExtractAllArchives } from "../jobs/extractAllArchives.js";
+import { startExtractErComic } from "../jobs/extractErComic.js";
 import { startMergeAllChapters } from "../jobs/mergeAllChapters.js";
 import { getJob } from "../jobs/jobStore.js";
 import { moveFolder, deleteTitleFolder, createTitleFolder } from "../jobs/folderOps.js";
@@ -202,18 +203,9 @@ export const resolvers: any = {
 
     async startExtractAllErArchives(_: any, __: any, ctx: AdminContext) {
       requireAdmin(ctx);
-      const dir = process.env.EXTRACT_ER_ARCHIVE_DIR || process.env.EXTRACT_ARCHIVE_DIR;
-      const unzipDest = process.env.UNZIP_DEST_DIR_ER || process.env.UNZIP_DEST_DIR;
-      const archiveDone = process.env.ARCHIVE_DONE_DIR_ER || process.env.ARCHIVE_DONE_DIR;
-      if (!dir) throw new Error("EXTRACT_ER_ARCHIVE_DIR が設定されていません");
-      if (!unzipDest) throw new Error("UNZIP_DEST_DIR_ER / UNZIP_DEST_DIR が設定されていません");
-      if (!archiveDone) throw new Error("ARCHIVE_DONE_DIR_ER / ARCHIVE_DONE_DIR が設定されていません");
-      return startExtractAllArchives({
-        sourceDir: dir,
-        kindLabel: "ERComic 解凍",
-        unzipDestDir: unzipDest,
-        archiveDoneDir: archiveDone,
-      });
+      // 旧 /comicUnzip/10_ER_unarchive.php 準拠の2段階処理を実行する。
+      // 環境変数: EXTRACT_ER_ARCHIVE_DIR / UNZIP_DEST_DIR(_ER) / ARCHIVE_DONE_DIR(_ER) / ER_DEST_DIR
+      return startExtractErComic();
     },
 
     async startMergeAllChapters(_: any, __: any, ctx: AdminContext) {
