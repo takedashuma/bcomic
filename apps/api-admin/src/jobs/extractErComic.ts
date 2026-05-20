@@ -190,59 +190,104 @@ interface ParsedERName {
   initial: string;
 }
 
+/** 文字列に日本語 (Hiragana/Katakana/CJK) を含むか */
+function hasJapanese(s: string): boolean {
+  return /[぀-ヿ㐀-䶿一-鿿ｦ-ﾟ]/.test(s);
+}
+
 /**
- * フォルダ名を分解。
+ * 解凍直後のフォルダ名を分解する。
  *
- * 対応する入力形式:
+ * 実データの形式 (旧PHP 10_ER_unarchive.php が処理しているもの):
  *
- *   A) "[JpName] JpTitle - [EnName] EnTitle"   (旧PHPの想定)
- *        ⇒ 2 ブラケット形式。enName/jpName が分離している。
+ *   "[EnAuthor] EnTitle [Digital] [JpAuthor] JpTitle [DL版]"
  *
- *   B) "[Author] RomajiTitle - EnglishTitle"   (実データ。英字のみ)
- *        ⇒ 1 ブラケット形式。Author を en/jp 共用、'-' 区切りで roma/eng の2タイトル
+ * すなわち:
+ *   - `[Digital]` `[DL版]` などのタグが間に混在する
+ *   - 2 ブラケット形式 (英 + 日) が一般的
+ *   - EnTitle 中に " - " ハイフンが含まれ得る (Title1 - Title2 のように)
+ *   - 英/日 の順序は入れ替わる可能性あり (判定で吸収)
  *
- *   C) "[Author] Title"                         (1 ブラケット、ハイフン無し)
- *        ⇒ Author を en/jp 共用、Title を en/jp 共用
- *
- * "[DL版]" / "[Digital]" / "(完)" 等の付随タグは事前に除去。
+ * 例:
+ *   "[Ameyama Denshin] Anneliese no Takarabako - Anneliese's Treasure Chest [Digital] [雨山電信] あんねりーぜのたからばこ [DL版]"
+ *   → enName="AmeyamaDenshin", jpName="雨山電信",
+ *     enTitle="Anneliese no Takarabako - Anneliese's Treasure Chest",
+ *     jpTitle="あんねりーぜのたからばこ"
+ *   → newName="[雨山電信] あんねりーぜのたからばこ - [AmeyamaDenshin] Anneliese no Takarabako - Anneliese's Treasure Chest"
+ *   → authorKey="AmeyamaDenshin;雨山電信"  initial="A"
  *
  * 失敗時 null。
  */
 function parseERFolderName(raw: string): ParsedERName | null {
-  // 付随タグの除去 (フォルダ末尾の "Digital" タグも除去)
+  // 1) ノイズタグ除去
   let s = raw
     .replace(/\[DL版\]/g, "")
     .replace(/\[Digital\]/gi, "")
-    .replace(/\bDigital\b/gi, "")
     .replace(/\(完\)/g, "");
   s = s.replace(/\s+/g, " ").trim();
 
-  // A) 2 ブラケット形式: "[JpName] JpTitle - [EnName] EnTitle"
-  // 旧PHP: explode(" [", $title1) で先頭の "[…" を残しつつ2分割
-  const splitIdx = s.indexOf(" [", 1);
-  if (splitIdx >= 0) {
-    const first = s.slice(0, splitIdx).trim();
-    const second = s.slice(splitIdx + 1).trim(); // "[…"
-    const jp = first.match(/^\[([^\]]+)\]\s+(.+?)\s*-\s*$/);
-    const en = second.match(/^\[([^\]]+)\]\s+(.+)$/);
-    if (jp && en) {
-      const jpName = jp[1].trim();
-      const jpTitle = jp[2].trim();
-      const enName = en[1].replace(/\s+/g, "").trim();
-      const enTitle = en[2].trim();
-      const newName = `[${jpName}] ${jpTitle} - [${enName}] ${enTitle}`;
-      const authorKey = `${enName};${jpName}`;
-      const initial = (enName.charAt(0) || "0").toUpperCase();
-      return { enName, jpName, enTitle, jpTitle, newName, authorKey, initial };
+  // 2) "[…] T …[…] T" 2-bracket 形式を非貪欲マッチで分解
+  //    A1 = 第1ブラケット中身, T1 = それに続く本文, A2 = 第2ブラケット中身, T2 = 残り
+  const two = s.match(/^\[([^\]]+)\]\s*(.+?)\s*\[([^\]]+)\]\s*(.+)$/);
+  if (two) {
+    const a1 = two[1].trim();
+    // 末尾の " - " など、ブラケット間の区切り記号は除去
+    const t1 = two[2].trim().replace(/[\s-]+$/, "").trim();
+    const a2 = two[3].trim();
+    const t2 = two[4].trim();
+
+    // 英 / 日 を文字種で振り分け
+    //   原則: 日本語を含む方が JP、ASCII オンリーは EN
+    const a1IsJp = hasJapanese(a1);
+    const a2IsJp = hasJapanese(a2);
+    let enName: string;
+    let jpName: string;
+    let enTitle: string;
+    let jpTitle: string;
+    if (!a1IsJp && a2IsJp) {
+      enName = a1;
+      enTitle = t1;
+      jpName = a2;
+      jpTitle = t2;
+    } else if (a1IsJp && !a2IsJp) {
+      jpName = a1;
+      jpTitle = t1;
+      enName = a2;
+      enTitle = t2;
+    } else if (!a1IsJp && !a2IsJp) {
+      // 両方 ASCII → 第1を EN とする (フォルダのほぼ全体が英字の同人誌想定)
+      enName = a1;
+      enTitle = t1;
+      jpName = a2;
+      jpTitle = t2;
+    } else {
+      // 両方 JP → 第1を JP とする
+      jpName = a1;
+      jpTitle = t1;
+      enName = a2;
+      enTitle = t2;
     }
+
+    const enNameNoSp = enName.replace(/\s+/g, "");
+    const newName = `[${jpName}] ${jpTitle} - [${enNameNoSp}] ${enTitle}`;
+    const authorKey = `${enNameNoSp};${jpName}`;
+    const initial = (enNameNoSp.charAt(0) || "0").toUpperCase();
+    return {
+      enName: enNameNoSp,
+      jpName,
+      enTitle,
+      jpTitle,
+      newName,
+      authorKey,
+      initial,
+    };
   }
 
-  // B/C) 1 ブラケット形式: "[Author] ...title..."
+  // 3) 1-bracket 形式: "[Author] ...title..." (日/英 が判別できない時のフォールバック)
   const one = s.match(/^\[([^\]]+)\]\s+(.+)$/);
   if (one) {
     const author = one[1].trim();
     const titlePart = one[2].trim();
-    // タイトル中の " - " で分割すれば roma/英 が分けられる
     let jpTitle = titlePart;
     let enTitle = titlePart;
     const dashSplit = titlePart.split(/\s+-\s+/);
@@ -250,15 +295,22 @@ function parseERFolderName(raw: string): ParsedERName | null {
       jpTitle = dashSplit[0].trim();
       enTitle = dashSplit.slice(1).join(" - ").trim();
     }
-    const enName = author.replace(/\s+/g, "");
+    const enNameNoSp = author.replace(/\s+/g, "");
     const jpName = author;
-    const authorKey = `${enName};${jpName}`;
-    const newName = `[${jpName}] ${jpTitle} - [${enName}] ${enTitle}`;
-    const initial = (enName.charAt(0) || "0").toUpperCase();
-    return { enName, jpName, enTitle, jpTitle, newName, authorKey, initial };
+    const newName = `[${jpName}] ${jpTitle} - [${enNameNoSp}] ${enTitle}`;
+    const authorKey = `${enNameNoSp};${jpName}`;
+    const initial = (enNameNoSp.charAt(0) || "0").toUpperCase();
+    return {
+      enName: enNameNoSp,
+      jpName,
+      enTitle,
+      jpTitle,
+      newName,
+      authorKey,
+      initial,
+    };
   }
 
-  // それ以外: パース不能
   return null;
 }
 
