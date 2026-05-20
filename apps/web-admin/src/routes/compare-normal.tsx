@@ -18,15 +18,22 @@ import { JobProgress } from "@/components/JobProgress";
  *
  * フロー:
  *   1. 「比較取得」 → REGIST_DIR 配下の葉フォルダ一覧を取得し、
- *      各エントリで tb_bok の既存巻数 (stock) を表示。
+ *      各エントリで tb_bok の既存巻 (stockBooks) を表示。
  *   2. 各エントリで:
- *        - 入換: REGIST_DIR/<folder> を COMIC_ROOT/<folder> に入れ替え
- *        - 削除: tb_bok から bok_txt1 contains の行を削除 + COMIC_ROOT/<folder> 削除
- *        - 変更: REGIST_DIR 配下の oldDir → newDir に rename
+ *        - 変更   : REGIST_DIR 配下の oldDir → newDir に rename
  *        - LinkPage: comic.k-manga.jp 検索リンクを別タブで開く
- *   3. 「NormalComic登録」 → startRegistUnregistAll 非同期ジョブ
- *      （UNREGIST 全件を tb_bok に INSERT 後、COMIC_ROOT へコピー）
+ *   3. stock の各巻 (StockBook) に対して:
+ *        - 入換 : 既存の COMIC_ROOT/<stock.folderPath> を REGIST_DIR/<stock.folderPath> で
+ *                 入換 (旧 exchangeDir.php)。新データ・イメージで置換。
+ *        - 削除 : tb_bok の該当行 + COMIC_ROOT/<stock.folderPath> を削除
+ *                 (旧 deleteDBandBook.php)
+ *   4. 「NormalComic登録」 → startRegistUnregistAll 非同期ジョブ
  */
+interface StockBook {
+  id: number;
+  no: string;
+  folderPath: string;
+}
 interface CompareEntry {
   folderPath: string;
   authorHead: string;
@@ -35,6 +42,7 @@ interface CompareEntry {
   titleJa: string;
   volumeNo: string;
   stockVolumes: string[];
+  stockBooks: StockBook[];
   stockCount: number;
   alreadyInDb: boolean;
   existingBokMid: number | null;
@@ -51,14 +59,14 @@ export function CompareNormalPage() {
 
   const [registJobId, setRegistJobId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // 各エントリのアクション完了済みを行ごとに灰色表示するためのセット
-  const [doneSet, setDoneSet] = useState<Set<string>>(new Set());
+  // stock 個別アクション完了済みをパスごとに灰色表示する
+  const [doneStocks, setDoneStocks] = useState<Set<string>>(new Set());
 
   const result = compareState.data?.compareUnregist;
   const entries: CompareEntry[] = result?.entries ?? [];
 
-  const markDone = (folderPath: string) => {
-    setDoneSet((s) => {
+  const markStockDone = (folderPath: string) => {
+    setDoneStocks((s) => {
       const next = new Set(s);
       next.add(folderPath);
       return next;
@@ -67,32 +75,41 @@ export function CompareNormalPage() {
 
   const onCompare = () => {
     setActionMsg(null);
-    setDoneSet(new Set());
+    setDoneStocks(new Set());
     doCompare();
   };
 
-  const onExchange = async (entry: CompareEntry) => {
-    if (!window.confirm(`入換しますか？\nREGIST_DIR${entry.folderPath} → COMIC_ROOT${entry.folderPath}`)) {
-      return;
-    }
-    const { data } = await doExchange({ variables: { newDir: entry.folderPath } });
-    const r = data?.exchangeDir;
-    setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
-    if (r?.ok) markDone(entry.folderPath);
-  };
-
-  const onDeleteBoth = async (entry: CompareEntry) => {
+  /** stock 1巻に対する入換: REGIST_DIR/<stock.folderPath> → COMIC_ROOT/<stock.folderPath> */
+  const onExchangeStock = async (stock: StockBook) => {
     if (
       !window.confirm(
-        `DB＆ファイル削除しますか？\n${entry.folderPath}\n(tb_bok の bok_txt1 一致行も削除)`
+        `既存巻を新データで入換しますか？\n` +
+          `REGIST_DIR${stock.folderPath}\n→ COMIC_ROOT${stock.folderPath}\n` +
+          `(id=${stock.id}, no=${stock.no})`
       )
     ) {
       return;
     }
-    const { data } = await doDelete({ variables: { bookPath: entry.folderPath } });
+    const { data } = await doExchange({ variables: { newDir: stock.folderPath } });
+    const r = data?.exchangeDir;
+    setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
+    if (r?.ok) markStockDone(stock.folderPath);
+  };
+
+  /** stock 1巻に対する削除: tb_bok 行 + COMIC_ROOT/<stock.folderPath> */
+  const onDeleteStock = async (stock: StockBook) => {
+    if (
+      !window.confirm(
+        `既存巻を削除しますか？\n${stock.folderPath}\n` +
+          `(id=${stock.id}, no=${stock.no}) / tb_bok 行 + COMIC_ROOT のフォルダを削除`
+      )
+    ) {
+      return;
+    }
+    const { data } = await doDelete({ variables: { bookPath: stock.folderPath } });
     const r = data?.deleteDBandBook;
     setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
-    if (r?.ok) markDone(entry.folderPath);
+    if (r?.ok) markStockDone(stock.folderPath);
   };
 
   const onRename = async (entry: CompareEntry) => {
@@ -106,10 +123,7 @@ export function CompareNormalPage() {
     const { data } = await doRename({ variables: { oldDir, newDir, inRegist: true } });
     const r = data?.renameRegistFolder;
     setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
-    if (r?.ok) {
-      // rename 後は元のパスを使えないので再取得を促す
-      onCompare();
-    }
+    if (r?.ok) onCompare();
   };
 
   const onRegist = async () => {
@@ -180,51 +194,59 @@ export function CompareNormalPage() {
               <thead className="bg-muted sticky top-0">
                 <tr>
                   <th className="text-left p-2 font-medium w-8">#</th>
-                  <th className="text-left p-2 font-medium">著者 / タイトル / 巻</th>
                   <th className="text-left p-2 font-medium">REGIST_DIR パス</th>
-                  <th className="text-left p-2 font-medium">stock</th>
-                  <th className="text-left p-2 font-medium w-[22rem]">操作</th>
+                  <th className="text-left p-2 font-medium">既存巻 (stock) — 巻毎に入換/削除</th>
+                  <th className="text-left p-2 font-medium w-[16rem]">行操作</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e, i) => {
-                  const done = doneSet.has(e.folderPath);
-                  const kmangaSearchUrl =
-                    "https://comic.k-manga.jp/search/word/" +
-                    encodeURIComponent(e.titleJa || "");
                   return (
-                    <tr
-                      key={e.folderPath}
-                      className={
-                        "border-t align-top " + (done ? "opacity-40 line-through" : "")
-                      }
-                    >
+                    <tr key={e.folderPath} className="border-t align-top">
                       <td className="p-2 tabular-nums">{i + 1}</td>
-                      <td className="p-2">
-                        <div className="font-medium">{e.titleJa || "(タイトル不明)"}</div>
-                        <div className="text-muted-foreground">
-                          {e.authorJa || "(著者不明)"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">巻 {e.volumeNo}</div>
-                      </td>
                       <td className="p-2 font-mono break-all">{e.folderPath}</td>
                       <td className="p-2">
-                        {e.stockCount > 0 ? (
-                          <div className="space-y-0.5">
-                            <div className="text-amber-700 font-medium tabular-nums">
-                              {e.stockCount}件
-                            </div>
-                            <div className="text-[10px] text-muted-foreground break-all">
-                              {e.stockVolumes.join(", ")}
-                            </div>
-                            {e.alreadyInDb && (
-                              <div className="text-[10px] text-red-700 font-medium">
-                                ※ 同巻あり
-                              </div>
-                            )}
-                          </div>
-                        ) : (
+                        {e.stockBooks.length === 0 ? (
                           <span className="text-muted-foreground">なし</span>
+                        ) : (
+                          <ul className="space-y-1">
+                            {e.stockBooks.map((s) => {
+                              const done = doneStocks.has(s.folderPath);
+                              return (
+                                <li
+                                  key={s.id}
+                                  className={
+                                    "flex items-center gap-1.5 " +
+                                    (done ? "opacity-40 line-through" : "")
+                                  }
+                                >
+                                  <span
+                                    className="font-mono text-amber-700 tabular-nums w-12 shrink-0"
+                                    title={s.folderPath}
+                                  >
+                                    {s.no}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={done}
+                                    onClick={() => onExchangeStock(s)}
+                                    title={`REGIST_DIR${s.folderPath} → COMIC_ROOT${s.folderPath}`}
+                                  >
+                                    入換
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={done}
+                                    onClick={() => onDeleteStock(s)}
+                                  >
+                                    削除
+                                  </Button>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         )}
                       </td>
                       <td className="p-2">
@@ -232,36 +254,10 @@ export function CompareNormalPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={done}
-                            onClick={() => onExchange(e)}
-                            title={`REGIST${e.folderPath} → COMIC${e.folderPath}`}
-                          >
-                            入換
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            disabled={done}
-                            onClick={() => onDeleteBoth(e)}
-                          >
-                            削除
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={done}
                             onClick={() => onRename(e)}
                           >
                             変更
                           </Button>
-                          <a
-                            href={kmangaSearchUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-8 items-center rounded-md border border-input bg-background px-2 text-xs hover:bg-muted"
-                          >
-                            LinkPage
-                          </a>
                         </div>
                       </td>
                     </tr>

@@ -285,6 +285,11 @@ export const COMPARE_UNREGIST = gql`
         titleJa
         volumeNo
         stockVolumes
+        stockBooks {
+          id
+          no
+          folderPath
+        }
         stockCount
         alreadyInDb
         existingBokMid

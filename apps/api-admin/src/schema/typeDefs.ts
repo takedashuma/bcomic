@@ -170,6 +170,15 @@ export const typeDefs = gql`
     path: String
   }
 
+  """
+  既存DBに登録済みの巻 (比較標準の stock 表示用)
+  """
+  type StockBook {
+    id: Int!
+    no: String!
+    folderPath: String!
+  }
+
   type CompareEntry {
     folderPath: String!
     authorHead: String!
@@ -178,6 +187,7 @@ export const typeDefs = gql`
     titleJa: String!
     volumeNo: String!
     stockVolumes: [String!]!
+    stockBooks: [StockBook!]!
     stockCount: Int!
     alreadyInDb: Boolean!
     existingBokMid: Int

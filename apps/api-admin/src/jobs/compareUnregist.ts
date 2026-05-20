@@ -12,6 +12,12 @@ import { prisma } from "../db.js";
  *   例:           /I/[IchibuSaki,ShirotoriUshio;一分咲,白鳥うしお] Moto OchikoboreKoushakuReijo;元、落ちこぼれ公爵令嬢です。THE COMIC/01/
  */
 
+export interface StockBook {
+  id: number;
+  no: string;          // 巻番号 "01"
+  folderPath: string;  // tb_bok.bok_txt1 (例 "/I/[Author;著者] Title;タイトル/01")
+}
+
 export interface CompareEntry {
   folderPath: string;       // 相対パス "/<initial>/<authorTitle>/<volume>"
   authorHead: string;       // 先頭1文字 ("I")
@@ -19,7 +25,8 @@ export interface CompareEntry {
   authorJa: string;
   titleJa: string;
   volumeNo: string;         // "01"
-  stockVolumes: string[];   // 同タイトルでDBに既にある巻 ["01","02","03"]
+  stockVolumes: string[];   // 同タイトルでDBに既にある巻 ["01","02","03"]  (互換維持)
+  stockBooks: StockBook[];  // 同タイトルでDBに既にある巻の詳細 (id/no/folderPath)
   stockCount: number;
   alreadyInDb: boolean;     // この volumeNo が既に登録されているか
   existingBokMid: number | null;
@@ -145,7 +152,14 @@ export async function compareUnregist(): Promise<CompareResult> {
         dbRows = [];
       }
     }
-    const stockVolumes = dbRows.map((r) => r.no || r.noJa || "").filter(Boolean);
+    const stockBooks: StockBook[] = dbRows
+      .map((r) => ({
+        id: r.id as number,
+        no: (r.no || r.noJa || "") as string,
+        folderPath: (r.folderPath || "") as string,
+      }))
+      .filter((s) => s.no && s.folderPath);
+    const stockVolumes = stockBooks.map((s) => s.no);
 
     // 同じ volume が既に DB にあるか
     const existing = dbRows.find((r) => (r.no || r.noJa) === volume);
@@ -158,7 +172,8 @@ export async function compareUnregist(): Promise<CompareResult> {
       titleJa,
       volumeNo: volume,
       stockVolumes,
-      stockCount: stockVolumes.length,
+      stockBooks,
+      stockCount: stockBooks.length,
       alreadyInDb: !!existing,
       existingBokMid: existing?.id ?? null,
     });
