@@ -16,6 +16,7 @@ import { listUnknownFolders } from "../jobs/listUnknownFolders.js";
 import { exchangeDir, deleteDBandBook, renameRegistFolder } from "../jobs/compareOps.js";
 import { startRegistUnregistAll } from "../jobs/registUnregist.js";
 import { startRegistErUnregistAll } from "../jobs/registErUnregist.js";
+import { startSplitSpread } from "../jobs/splitSpread.js";
 import { startExtractAllArchives } from "../jobs/extractAllArchives.js";
 import { startExtractErComic } from "../jobs/extractErComic.js";
 import { startMergeAllChapters } from "../jobs/mergeAllChapters.js";
@@ -308,6 +309,17 @@ export const resolvers: any = {
     async startRegistErUnregistAll(_: any, __: any, ctx: AdminContext) {
       requireAdmin(ctx);
       return startRegistErUnregistAll();
+    },
+    async startSplitSpread(
+      _: any,
+      args: { folderPath: string; inRegist?: boolean },
+      ctx: AdminContext
+    ) {
+      requireAdmin(ctx);
+      return startSplitSpread({
+        folderPath: args.folderPath,
+        inRegist: args.inRegist ?? true,
+      });
     },
 
     // ===== 検索結果アクション (旧admin_new準拠) =====

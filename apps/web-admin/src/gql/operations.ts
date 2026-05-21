@@ -328,6 +328,16 @@ export const START_REGIST_ER_UNREGIST_ALL = gql`
   }
 `;
 
+export const START_SPLIT_SPREAD = gql`
+  mutation StartSplitSpread($folderPath: String!, $inRegist: Boolean = true) {
+    startSplitSpread(folderPath: $folderPath, inRegist: $inRegist) {
+      id
+      status
+      message
+    }
+  }
+`;
+
 // ===== Home 検索結果アクション (旧admin_new準拠) =====
 export const MOVE_TO_REGIST = gql`
   mutation MoveToRegist($folderPath: String!) {

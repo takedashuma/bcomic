@@ -296,6 +296,14 @@ export const typeDefs = gql`
     """
     startRegistErUnregistAll: Job!
 
+    """
+    指定の巻フォルダ内の見開き画像を左右に分割するジョブ。
+    1ページ目: 左右余白カットのみ / 2ページ目以降: 余白カット + 左右分割 (右ページ先)
+    出力先: <folderPath>/split/  (原本は残す)
+    inRegist=true なら REGIST_DIR 配下、false なら COMIC_ROOT 配下を対象とする。
+    """
+    startSplitSpread(folderPath: String!, inRegist: Boolean = true): Job!
+
     # ----- 検索結果に対するフォルダ操作 -----
     """
     タイトルフォルダの丸ごと移動（rename） / 旧コード互換
