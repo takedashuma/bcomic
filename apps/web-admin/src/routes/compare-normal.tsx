@@ -7,6 +7,7 @@ import {
   RENAME_REGIST_FOLDER,
   START_REGIST_UNREGIST_ALL,
   START_REGIST_ER_UNREGIST_ALL,
+  START_SPLIT_SPREAD,
 } from "@/gql/operations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -58,9 +59,11 @@ export function CompareNormalPage() {
   const [doRename] = useMutation(RENAME_REGIST_FOLDER);
   const [doRegist, registState] = useMutation(START_REGIST_UNREGIST_ALL);
   const [doRegistEr, registErState] = useMutation(START_REGIST_ER_UNREGIST_ALL);
+  const [doSplitSpread] = useMutation(START_SPLIT_SPREAD);
 
   const [registJobId, setRegistJobId] = useState<string | null>(null);
   const [registErJobId, setRegistErJobId] = useState<string | null>(null);
+  const [splitJobId, setSplitJobId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // stock 個別アクション完了済みをパスごとに灰色表示する
   const [doneStocks, setDoneStocks] = useState<Set<string>>(new Set());
@@ -97,6 +100,30 @@ export function CompareNormalPage() {
     const r = data?.exchangeDir;
     setActionMsg(r ? { ok: r.ok, text: r.message } : { ok: false, text: "API応答なし" });
     if (r?.ok) markStockDone(stock.folderPath);
+  };
+
+  /**
+   * stock 1巻に対する見開き分割:
+   * REGIST_DIR/<stock.folderPath> の画像から左右の黒余白をカットし、
+   * 2ページ目以降を縦半分に分割 (右ページ先、左ページ後) して
+   * <stock.folderPath>/<volName>/ に出力する非同期ジョブ。
+   */
+  const onSplitStock = async (stock: StockBook) => {
+    if (
+      !window.confirm(
+        `見開き分割を実行しますか?\nREGIST_DIR${stock.folderPath}\n` +
+          `(同階層の "${stock.no}" サブフォルダに分割画像を出力)`
+      )
+    ) {
+      return;
+    }
+    setSplitJobId(null);
+    const { data } = await doSplitSpread({
+      variables: { folderPath: stock.folderPath, inRegist: true },
+    });
+    if (data?.startSplitSpread?.id) {
+      setSplitJobId(data.startSplitSpread.id);
+    }
   };
 
   /** stock 1巻に対する削除: tb_bok 行 + COMIC_ROOT/<stock.folderPath> */
@@ -202,6 +229,7 @@ export function CompareNormalPage() {
 
         <JobProgress jobId={registJobId} />
         <JobProgress jobId={registErJobId} />
+        <JobProgress jobId={splitJobId} />
 
         {result && result.logs && result.logs.length > 0 && (
           <details className="text-xs text-muted-foreground">
@@ -222,9 +250,13 @@ export function CompareNormalPage() {
               <thead className="bg-muted sticky top-0">
                 <tr>
                   <th className="text-left p-2 font-medium w-8">#</th>
-                  <th className="text-left p-2 font-medium">REGIST_DIR パス</th>
-                  <th className="text-left p-2 font-medium">既存巻 (stock) — 巻毎に入換/削除</th>
-                  <th className="text-left p-2 font-medium w-[16rem]">行操作</th>
+                  <th className="text-left p-2 font-medium w-[40%]">REGIST_DIR パス</th>
+                  <th className="text-left p-2 font-medium">
+                    既存巻 (stock) — 巻毎に 入換 / 削除 / 見開き分割
+                  </th>
+                  <th className="text-left p-2 font-medium w-[5rem] whitespace-nowrap">
+                    行操作
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -270,6 +302,15 @@ export function CompareNormalPage() {
                                     onClick={() => onDeleteStock(s)}
                                   >
                                     削除
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={done}
+                                    onClick={() => onSplitStock(s)}
+                                    title="左右の黒余白を自動カット + 見開き分割 (右ページ先)"
+                                  >
+                                    見開き分割
                                   </Button>
                                 </li>
                               );

@@ -9,7 +9,6 @@ import {
   CREATE_REGIST_FOLDER,
   DELETE_VOLUME_DB,
   DELETE_VOLUME_DB_AND_DIR,
-  START_SPLIT_SPREAD,
 } from "@/gql/operations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,8 +52,6 @@ export function HomePage() {
   const [doMakeFolder] = useMutation(CREATE_REGIST_FOLDER, refetch);
   const [doDelDB] = useMutation(DELETE_VOLUME_DB, refetch);
   const [doDelBoth] = useMutation(DELETE_VOLUME_DB_AND_DIR, refetch);
-  const [doSplitSpread] = useMutation(START_SPLIT_SPREAD);
-  const [splitJobId, setSplitJobId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const setMsg = (r: any) =>
@@ -124,23 +121,6 @@ export function HomePage() {
     const { data } = await doDelDB({ variables: { id } });
     setMsg(data?.deleteVolumeDB);
   };
-  /**
-   * 見開き分割: <folderPath>/split/ 配下に左右分割した画像を出力
-   * デフォルトでは REGIST_DIR 側を対象とする。COMIC_ROOT を対象にしたい場合は
-   * inRegist: false を渡す。
-   */
-  const onSplitSpread = async (folderPath: string) => {
-    const which = window.confirm(
-      `見開き分割を実行します。\n${folderPath}\n` +
-        `\n[OK] REGIST_DIR 配下を対象\n[キャンセル] COMIC_ROOT 配下を対象`
-    );
-    setSplitJobId(null);
-    const { data } = await doSplitSpread({
-      variables: { folderPath, inRegist: which },
-    });
-    if (data?.startSplitSpread?.id) setSplitJobId(data.startSplitSpread.id);
-  };
-
   /** Delete DB & Dir: tb_bok + COMIC_ROOT/<folderPath> */
   const onDeleteBoth = async (id: number, folderPath: string) => {
     if (
@@ -182,7 +162,6 @@ export function HomePage() {
         <JobProgress jobId={extractJobId} />
         <JobProgress jobId={mergeJobId} />
         <JobProgress jobId={erJobId} />
-        <JobProgress jobId={splitJobId} />
       </Card>
 
       {/* ===== Search ===== */}
@@ -280,14 +259,6 @@ export function HomePage() {
                             onClick={() => v.folderPath && onDeleteBoth(v.id, v.folderPath)}
                           >
                             Delete DB&Dir
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => v.folderPath && onSplitSpread(v.folderPath)}
-                            title="左右余白を自動カット + 見開き分割 (split/ に出力)"
-                          >
-                            見開き分割
                           </Button>
                         </div>
                       </td>
