@@ -103,23 +103,23 @@ export function CompareNormalPage() {
   };
 
   /**
-   * stock 1巻に対する見開き分割:
-   * REGIST_DIR/<stock.folderPath> の画像から左右の黒余白をカットし、
+   * 行 (1コミック巻) に対する見開き分割:
+   * REGIST_DIR/<entry.folderPath> の画像から左右の黒余白をカットし、
    * 2ページ目以降を縦半分に分割 (右ページ先、左ページ後) して
-   * <stock.folderPath>/<volName>/ に出力する非同期ジョブ。
+   * <entry.folderPath>/<volName>/ サブフォルダに出力する非同期ジョブ。
    */
-  const onSplitStock = async (stock: StockBook) => {
+  const onSplitEntry = async (entry: CompareEntry) => {
     if (
       !window.confirm(
-        `見開き分割を実行しますか?\nREGIST_DIR${stock.folderPath}\n` +
-          `(同階層の "${stock.no}" サブフォルダに分割画像を出力)`
+        `見開き分割を実行しますか?\nREGIST_DIR${entry.folderPath}\n` +
+          `(同階層の "${entry.volumeNo}" サブフォルダに分割画像を出力)`
       )
     ) {
       return;
     }
     setSplitJobId(null);
     const { data } = await doSplitSpread({
-      variables: { folderPath: stock.folderPath, inRegist: true },
+      variables: { folderPath: entry.folderPath, inRegist: true },
     });
     if (data?.startSplitSpread?.id) {
       setSplitJobId(data.startSplitSpread.id);
@@ -252,9 +252,9 @@ export function CompareNormalPage() {
                   <th className="text-left p-2 font-medium w-8">#</th>
                   <th className="text-left p-2 font-medium w-[40%]">REGIST_DIR パス</th>
                   <th className="text-left p-2 font-medium">
-                    既存巻 (stock) — 巻毎に 入換 / 削除 / 見開き分割
+                    既存巻 (stock) — 巻毎に 入換 / 削除
                   </th>
-                  <th className="text-left p-2 font-medium w-[5rem] whitespace-nowrap">
+                  <th className="text-left p-2 font-medium w-[10rem] whitespace-nowrap">
                     行操作
                   </th>
                 </tr>
@@ -303,15 +303,6 @@ export function CompareNormalPage() {
                                   >
                                     削除
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={done}
-                                    onClick={() => onSplitStock(s)}
-                                    title="左右の黒余白を自動カット + 見開き分割 (右ページ先)"
-                                  >
-                                    見開き分割
-                                  </Button>
                                 </li>
                               );
                             })}
@@ -326,6 +317,14 @@ export function CompareNormalPage() {
                             onClick={() => onRename(e)}
                           >
                             変更
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onSplitEntry(e)}
+                            title="左右の黒余白を自動カット + 見開き分割 (右ページ先)"
+                          >
+                            見開き分割
                           </Button>
                         </div>
                       </td>
